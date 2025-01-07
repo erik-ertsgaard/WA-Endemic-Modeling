@@ -5,6 +5,10 @@
 
 # 1.1 Load Packages ----
 
+install.packages("biomod2")
+
+library(biomod2)
+
 # 1.2 Load Functions ----
 
 # 1.3 Load Data ----
