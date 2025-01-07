@@ -11,7 +11,7 @@
 
 # 2.0 Data Adjustments -----------------------------------------------------
 
-# 2.1 Filtering Occurence Data ----
+# 2.1 Filtering Occurrence Data ----
 
 # 2.2 Adjusting Predictor Variables ----
 
