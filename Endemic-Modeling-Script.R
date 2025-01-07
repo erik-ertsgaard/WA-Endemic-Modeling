@@ -8,6 +8,7 @@
 install.packages("biomod2")
 
 library(biomod2)
+library(dplyr)
 
 # 1.2 Load Functions ----
 
