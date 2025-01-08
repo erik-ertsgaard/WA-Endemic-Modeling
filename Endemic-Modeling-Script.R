@@ -6,13 +6,21 @@
 # 1.1 Load Packages ----
 
 install.packages("biomod2")
+install.packages("tidyverse")
 
 library(biomod2)
-library(dplyr)
+library(tidyverse)
+
 
 # 1.2 Load Functions ----
 
 # 1.3 Load Data ----
+
+# Response Data - Occurrences
+
+pera <- read.csv() %>%
+  merge(read.csv())
+
 
 # 2.0 Data Adjustments -----------------------------------------------------
 
