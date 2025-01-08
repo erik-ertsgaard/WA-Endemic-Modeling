@@ -15,4 +15,8 @@ peer-reviewed journal in March 2025.
 
 The names, contents, and purpose of each file are described below (upon their creation),
 
-[no files yet]
+README.md - this file, a brief description of the project and guidelines for collaboration
+
+WA-Endemic-Modeling-Repository.RProj - the R Project file that encases our script and data sources to streamline working directory workflows (it may be easier for users to open this file first)
+
+Endemic-Modeling-Script.R - the master script for species distribution modeling efforts, with data synthesis, adjustments, analysis, and visualization all included
