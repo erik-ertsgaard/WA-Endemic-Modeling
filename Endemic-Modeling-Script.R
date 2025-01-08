@@ -18,6 +18,7 @@ library(dplyr)
 
 # 2.1 Filtering Occurrence Data ----
 
+library(terra)
 # 2.2 Adjusting Predictor Variables ----
 
 # 2.3 Principle Coordinate Analysis (PCA) ----
