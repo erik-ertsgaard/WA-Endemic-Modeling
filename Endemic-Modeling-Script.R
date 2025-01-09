@@ -21,8 +21,9 @@ library(rinat)
 
 # 1.3 Load Data ----
 
-# Response Data - Occurrences
+## Response Data (Species Occurrences)
 
+# pulling iNaturalist observations for each species into one table using the 'rinat' package
 inat.all <- rbind(get_inat_obs(taxon_name = "Pedicularis rainierensis"),
                   get_inat_obs(taxon_name = "Castilleja cryptantha"),
                   get_inat_obs(taxon_name = "Tauschia stricklandii"),
@@ -32,43 +33,11 @@ inat.all <- rbind(get_inat_obs(taxon_name = "Pedicularis rainierensis"),
   filter(quality_grade == "research") %>%
   filter(positional_accuracy < 30) %>%
   filter(!is.na(positional_accuracy)) %>%
-  filter(coordinates_obscured == "false")
+  filter(coordinates_obscured == "false") #applying filters to ensure identification and spatial accuracy
 
-pera.inat <- get_inat_obs(taxon_name = "Pedicularis rainierensis",
-                          quality = "research",
-                          geo = TRUE) %>%
-  filter(positional_accuracy < 30) %>%
-  filter(coordinates_obscured == "false")
+# creating a file for reference in the repository, may be replaced when more response data is appended
+write_csv(inat.all, file = "Data/inat-response-data.csv")
 
-cacr.inat <- get_inat_obs(taxon_name = "Castilleja cryptantha",
-                          quality = "research",
-                          geo = TRUE) %>%
-  filter(positional_accuracy < 30) %>%
-  filter(coordinates_obscured == "false")
-
-tast.inat <- get_inat_obs(taxon_name = "Tauschia stricklandii",
-                          quality = "research",
-                          geo = TRUE) %>%
-  filter(positional_accuracy < 30) %>%
-  filter(coordinates_obscured == "false")
-
-cath.inat <- get_inat_obs(taxon_name = "Chaenactis thompsonii",
-                          quality = "research",
-                          geo = TRUE) %>%
-  filter(positional_accuracy < 30) %>%
-  filter(coordinates_obscured == "false")
-
-orth.inat <- get_inat_obs(taxon_name = "Oreocarya thompsonii",
-                          quality = "research",
-                          geo = TRUE) %>%
-  filter(positional_accuracy < 30) %>%
-  filter(coordinates_obscured == "false")
-
-locu.inat <- get_inat_obs(taxon_name = "Lomatium cuspidatum",
-                          quality = "research",
-                          geo = TRUE) %>%
-  filter(positional_accuracy < 30) %>%
-  filter(coordinates_obscured == "false")
 
 # 2.0 Data Adjustments -----------------------------------------------------
 
