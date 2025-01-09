@@ -16,6 +16,11 @@ library(tidyverse)
 
 # 1.3 Load Data ----
 
+# Climate Data
+
+
+
+
 # Response Data - Occurrences
 
 pera <- read.csv() %>%
