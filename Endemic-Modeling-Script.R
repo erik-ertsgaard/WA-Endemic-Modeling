@@ -27,7 +27,11 @@ library(sp)
 
 # 1.3 Load Data ----
 
-# Create Shapefiles and SpatVectors for Study Extent
+## Set working directory
+
+directory <- "C:/.../"
+
+## Create Shapefiles and SpatVectors for Study Extent
 
 WenatcheeExtentCoords <- data.frame(x = c(-120.670, -120.670, -121.025, -121.025),
                                     y = c(47.565, 47.340, 47.565, 47.340))
@@ -38,12 +42,9 @@ WenatcheeExtentPolygon <- Polygon(WenatcheeExtentCoords) %>%
   list() %>% 
   SpatialPolygons(proj4string = CRS("WGS84"))
 
-directory <- "C:/..."
-
-shapefile(x = WenatcheeExtentPolygon, file = paste0(directory, "/WenatcheeExtent.shp"))
+shapefile(x = WenatcheeExtentPolygon, file = paste0(directory, "WenatcheeExtent.shp"))
 
 SpatVectorWenatchee <- vect(WenatcheeExtentPolygon)
-
 
 
 RainierExtentCoords <- data.frame(x = c(-121.955, -121.955, -121.540, -121.540),
@@ -55,19 +56,15 @@ RainierExtentPolygon <- Polygon(RainierExtentCoords) %>%
   list() %>% 
   SpatialPolygons(proj4string = CRS("WGS84"))
 
-directory <- "C:/..."
-
-shapefile(x = RainierExtentPolygon, file = paste0(directory, "/RainierExtent.shp"))
+shapefile(x = RainierExtentPolygon, file = paste0(directory, "RainierExtent.shp"))
 
 SpatVectorRainier <- vect(RainierExtentPolygon)
 
+## Digital Elevation Models
 
-
-# Digital Elevation Models
-
-WenatcheeW <- rast("C:/Users/nicgj/Downloads/WenatcheeDEM W GeoTiff USGS One Third Arc Second n48w122 20230307.tif")
-WenatcheeE <- rast("C:/Users/nicgj/Downloads/WenatcheeDEM E GeoTiff USGS One Third Arc Second n48w121 20240617.tif")
-Rainier <- rast("C:/Users/nicgj/Downloads/RainierDEM GeoTiff USGS One Third Arc Second n47w122 20220919.tif")
+WenatcheeW <- rast(paste0(directory, "WenatcheeDEM W GeoTiff USGS One Third Arc Second n48w122 20230307.tif"))
+WenatcheeE <- rast(paste0(directory, "WenatcheeDEM E GeoTiff USGS One Third Arc Second n48w121 20240617.tif"))
+Rainier <- rast(paste0(directory, "RainierDEM GeoTiff USGS One Third Arc Second n47w122 20220919.tif"))
 
 Wenatchee <- mosaic(WenatcheeW, WenatcheeE) %>% 
   crop(SpatVectorWenatchee) %>% 
@@ -76,14 +73,11 @@ Wenatchee <- mosaic(WenatcheeW, WenatcheeE) %>%
 Rainier <- crop(Rainier, SpatVectorRainier) %>% 
   project("+proj=longlat +datum=WGS84")
 
-directory <- "C:/Users/nicgj/OneDrive/Documents/50 Peaks Plus/Wenatchee Climate Modeling/2025Work/"
-
 writeRaster(Wenatchee, filename = paste0(directory, "WenatcheeDEM.tif"))
 
 writeRaster(Rainier, filename = paste0(directory, "RainierDEM.tif"))
 
-
-# Climate Data
+## Climate Data
 
 climateNAr(inputFile = paste0(directory, "WenatcheeDEM.tif"),
            periodList = "Normal_1961_1990.nrm",
