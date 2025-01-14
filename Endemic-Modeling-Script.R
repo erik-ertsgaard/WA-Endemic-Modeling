@@ -13,6 +13,7 @@ install.packages("rinat")
 #install ClimateNAr from register.climatena.ca
 install.packages("terra")
 install.packages("sp")
+install.packages("raster")
 
 library(biomod2)
 library(tidyverse)
@@ -22,6 +23,7 @@ library(rinat)
 library(ClimateNAr)
 library(terra)
 library(sp)
+library(raster)
 
 # 1.2 Load Functions ----
 
