@@ -34,7 +34,7 @@ directory <- "C:/.../"
 ## Create Shapefiles and SpatVectors for Study Extent
 
 WenatcheeExtentCoords <- data.frame(x = c(-120.670, -120.670, -121.025, -121.025),
-                                    y = c(47.565, 47.340, 47.565, 47.340))
+                                    y = c(47.565, 47.340, 47.340, 47.565))
 
 WenatcheeExtentPolygon <- Polygon(WenatcheeExtentCoords) %>% 
   list() %>% 
@@ -48,7 +48,7 @@ SpatVectorWenatchee <- vect(WenatcheeExtentPolygon)
 
 
 RainierExtentCoords <- data.frame(x = c(-121.955, -121.955, -121.540, -121.540),
-                                    y = c(46.990, 46.735, 46.990, 46.735))
+                                    y = c(46.990, 46.735, 46.735, 46.990))
 
 RainierExtentPolygon <- Polygon(RainierExtentCoords) %>% 
   list() %>% 
