@@ -10,19 +10,85 @@ install.packages("tidyverse")
 install.packages("rinat")
 #install.packages("rgbif")
 #install.packages("rvest")
+#install ClimateNAr from register.climatena.ca
+install.packages("terra")
+install.packages("sp")
+install.packages("raster")
 
 library(biomod2)
 library(tidyverse)
 library(rinat)
 #library(rgbif)
 #library(rvest)
+library(ClimateNAr)
+library(terra)
+library(sp)
+library(raster)
 
 # 1.2 Load Functions ----
 
 # 1.3 Load Data ----
 
-# Response Data - Occurrences
+## Set working directory
 
+directory <- "C:/.../"
+
+## Create Shapefiles and SpatVectors for Study Extent
+
+WenatcheeExtentCoords <- data.frame(x = c(-120.670, -120.670, -121.025, -121.025),
+                                    y = c(47.565, 47.340, 47.340, 47.565))
+
+WenatcheeExtentPolygon <- Polygon(WenatcheeExtentCoords) %>% 
+  list() %>% 
+  Polygons(ID = "Wenatchee Study Extent") %>% 
+  list() %>% 
+  SpatialPolygons(proj4string = CRS("WGS84"))
+
+shapefile(x = WenatcheeExtentPolygon, file = paste0(directory, "WenatcheeExtent.shp"))
+
+SpatVectorWenatchee <- vect(WenatcheeExtentPolygon)
+
+
+RainierExtentCoords <- data.frame(x = c(-121.955, -121.955, -121.540, -121.540),
+                                    y = c(46.990, 46.735, 46.735, 46.990))
+
+RainierExtentPolygon <- Polygon(RainierExtentCoords) %>% 
+  list() %>% 
+  Polygons(ID = "Rainier Study Extent") %>% 
+  list() %>% 
+  SpatialPolygons(proj4string = CRS("WGS84"))
+
+shapefile(x = RainierExtentPolygon, file = paste0(directory, "RainierExtent.shp"))
+
+SpatVectorRainier <- vect(RainierExtentPolygon)
+
+## Digital Elevation Models
+
+WenatcheeW <- rast(paste0(directory, "WenatcheeDEM W GeoTiff USGS One Third Arc Second n48w122 20230307.tif"))
+WenatcheeE <- rast(paste0(directory, "WenatcheeDEM E GeoTiff USGS One Third Arc Second n48w121 20240617.tif"))
+Rainier <- rast(paste0(directory, "RainierDEM GeoTiff USGS One Third Arc Second n47w122 20220919.tif"))
+
+Wenatchee <- mosaic(WenatcheeW, WenatcheeE) %>% 
+  crop(SpatVectorWenatchee) %>% 
+  project("+proj=longlat +datum=WGS84")
+
+Rainier <- crop(Rainier, SpatVectorRainier) %>% 
+  project("+proj=longlat +datum=WGS84")
+
+writeRaster(Wenatchee, filename = paste0(directory, "WenatcheeDEM.tif"))
+
+writeRaster(Rainier, filename = paste0(directory, "RainierDEM.tif"))
+
+## Climate Data
+
+climateNAr(inputFile = paste0(directory, "WenatcheeDEM.tif"),
+           periodList = "Normal_1961_1990.nrm",
+           varList = "YSM",
+           outDir = directory)
+
+## Response Data (Species Occurrences)
+
+# pulling iNaturalist observations for each species into one table using the 'rinat' package
 inat.all <- rbind(get_inat_obs(taxon_name = "Pedicularis rainierensis"),
                   get_inat_obs(taxon_name = "Castilleja cryptantha"),
                   get_inat_obs(taxon_name = "Tauschia stricklandii"),
@@ -32,48 +98,22 @@ inat.all <- rbind(get_inat_obs(taxon_name = "Pedicularis rainierensis"),
   filter(quality_grade == "research") %>%
   filter(positional_accuracy < 30) %>%
   filter(!is.na(positional_accuracy)) %>%
-  filter(coordinates_obscured == "false")
+  filter(coordinates_obscured == "false") #applying filters to ensure identification and spatial accuracy
 
-pera.inat <- get_inat_obs(taxon_name = "Pedicularis rainierensis",
-                          quality = "research",
-                          geo = TRUE) %>%
-  filter(positional_accuracy < 30) %>%
-  filter(coordinates_obscured == "false")
+# creating a file for reference in the repository, may be replaced when more response data is appended
+write_csv(inat.all, file = "Data/inat-response-data.csv")
 
-cacr.inat <- get_inat_obs(taxon_name = "Castilleja cryptantha",
-                          quality = "research",
-                          geo = TRUE) %>%
-  filter(positional_accuracy < 30) %>%
-  filter(coordinates_obscured == "false")
+# reading in CPNWH occurrence data downloaded (and cleaned) from <https://www.pnwherbaria.org/data/search.php>
+cpnwh.all <- read.csv("Data/cpnwh_response-data-cleaned.csv") 
 
-tast.inat <- get_inat_obs(taxon_name = "Tauschia stricklandii",
-                          quality = "research",
-                          geo = TRUE) %>%
-  filter(positional_accuracy < 30) %>%
-  filter(coordinates_obscured == "false")
-
-cath.inat <- get_inat_obs(taxon_name = "Chaenactis thompsonii",
-                          quality = "research",
-                          geo = TRUE) %>%
-  filter(positional_accuracy < 30) %>%
-  filter(coordinates_obscured == "false")
-
-orth.inat <- get_inat_obs(taxon_name = "Oreocarya thompsonii",
-                          quality = "research",
-                          geo = TRUE) %>%
-  filter(positional_accuracy < 30) %>%
-  filter(coordinates_obscured == "false")
-
-locu.inat <- get_inat_obs(taxon_name = "Lomatium cuspidatum",
-                          quality = "research",
-                          geo = TRUE) %>%
-  filter(positional_accuracy < 30) %>%
-  filter(coordinates_obscured == "false")
+cpnwh.filtered <- filter(cpnwh.all, Valid.LatLng == "Y") %>%
+  filter(Coordinate.Uncertainty.in.Meters <= 1000)
 
 # 2.0 Data Adjustments -----------------------------------------------------
 
 # 2.1 Filtering Occurrence Data ----
 
+library(terra)
 # 2.2 Adjusting Predictor Variables ----
 
 # 2.3 Principle Coordinate Analysis (PCA) ----
