@@ -103,6 +103,9 @@ inat.all <- rbind(get_inat_obs(taxon_name = "Pedicularis rainierensis"),
 # creating a file for reference in the repository, may be replaced when more response data is appended
 write_csv(inat.all, file = "Data/inat-response-data.csv")
 
+# reading in CPNWH occurrence data downloaded (and cleaned) from <https://www.pnwherbaria.org/data/search.php>
+cpnwh.all <- read.csv("Data/cpnwh_response-data-cleaned.csv")
+
 
 # 2.0 Data Adjustments -----------------------------------------------------
 
