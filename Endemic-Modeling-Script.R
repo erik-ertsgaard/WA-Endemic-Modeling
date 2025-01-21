@@ -14,6 +14,7 @@ install.packages("rinat")
 install.packages("terra")
 install.packages("sp")
 install.packages("raster")
+install.packages("sf")
 
 library(biomod2)
 library(tidyverse)
@@ -24,11 +25,56 @@ library(ClimateNAr)
 library(terra)
 library(sp)
 library(raster)
+library(sf)
 
 # 1.2 Load Functions ----
 
+reproject_to_wgs84 <- function(df) {
+  
+  df$Geodetic.Datum <- gsub(" ", "", df$Geodetic.Datum)
+  
+  df <- df %>%
+    mutate(is_wgs84 = ifelse(`Geodetic.Datum` == "WGS84", TRUE, FALSE))
+  
+  data_wgs84 <- df %>% filter(is_wgs84 == TRUE)
+  data_not_wgs84 <- df %>% filter(is_wgs84 == FALSE)
+  
+  # Handle reprojection based on the original CRS for NAD83 and NAD27
+  if (nrow(data_not_wgs84) > 0) {
+    # Check the existing CRS and reproject accordingly
+    data_not_wgs84 <- st_transform(data_not_wgs84, crs = st_crs(4326))  # Default to WGS 84 (EPSG:4326)
+    
+    # Handle specific cases for NAD83 and NAD27
+    # NAD83 is commonly represented as EPSG:4269
+    # NAD27 is commonly represented as EPSG:4267
+    
+    # Detect if the CRS is NAD83 (EPSG:4269) or NAD27 (EPSG:4267) and reproject accordingly
+    data_not_wgs84 <- data_not_wgs84 %>%
+      mutate(
+        is_nad83 = st_crs(.) == st_crs(4269),
+        is_nad27 = st_crs(.) == st_crs(4267)
+      ) %>%
+      # Reproject to WGS 84 from NAD83 or NAD27
+      mutate(
+        geometry = case_when(
+          is_nad83 ~ st_transform(geometry, st_crs(4326)),  # Reproject NAD83 to WGS 84
+          is_nad27 ~ st_transform(geometry, st_crs(4326)),  # Reproject NAD27 to WGS 84
+          TRUE ~ geometry  # Keep unchanged if it's already in WGS84
+        )
+      ) %>%
+      # Remove the helper columns
+      select(-is_nad83, -is_nad27)
+    
+    df <- bind_rows(data_wgs84, data_not_wgs84)
+  }
+  
+  return(df)
+}
+
+
 # 1.3 Load Data ----
 
+# 1.3a Load Predictor Data ----
 ## Set working directory
 
 directory <- "C:/.../"
@@ -86,6 +132,8 @@ climateNAr(inputFile = paste0(directory, "WenatcheeDEM.tif"),
            varList = "YSM",
            outDir = directory)
 
+# 1.3b Loading Response Data ----
+
 ## Response Data (Species Occurrences)
 
 # pulling iNaturalist observations for each species into one table using the 'rinat' package
@@ -107,7 +155,16 @@ write_csv(inat.all, file = "Data/inat-response-data.csv")
 cpnwh.all <- read.csv("Data/cpnwh_response-data-cleaned.csv") 
 
 cpnwh.filtered <- filter(cpnwh.all, Valid.LatLng == "Y") %>%
-  filter(Coordinate.Uncertainty.in.Meters <= 1000)
+  filter(Coordinate.Uncertainty.in.Meters <= 1000) %>%
+  st_as_sf(coords = c("Decimal.Longitude", "Decimal.Latitude"), 
+           crs = 4326)
+
+cpnwh.wgs84 <- reproject_to_wgs84(cpnwh.filtered) %>%
+  rename(was_wgs84 = is_wgs84,
+         Original.Geodetic.Datum = Geodetic.Datum)
+  
+st_crs(cpnwh.wgs84)
+
 
 # 2.0 Data Adjustments -----------------------------------------------------
 
