@@ -146,25 +146,41 @@ inat.all <- rbind(get_inat_obs(taxon_name = "Pedicularis rainierensis"),
   filter(quality_grade == "research") %>%
   filter(positional_accuracy < 30) %>%
   filter(!is.na(positional_accuracy)) %>%
-  filter(coordinates_obscured == "false") #applying filters to ensure identification and spatial accuracy
+  filter(coordinates_obscured == "false") %>% #applying filters to ensure identification and spatial accuracy
 
 # creating a file for reference in the repository, may be replaced when more response data is appended
 write_csv(inat.all, file = "Data/inat-response-data.csv")
 
+# converting inat.all to spatial data frame
+inat.all <- st_as_sf(inat.all,
+                     coords = c("longitude", "latitude"), 
+                     crs = 4326) 
+
 # reading in CPNWH occurrence data downloaded (and cleaned) from <https://www.pnwherbaria.org/data/search.php>
 cpnwh.all <- read.csv("Data/cpnwh_response-data-cleaned.csv") 
 
+#filtering for records that meet occurrence standards and creating a spatial data frame
 cpnwh.filtered <- filter(cpnwh.all, Valid.LatLng == "Y") %>%
   filter(Coordinate.Uncertainty.in.Meters <= 1000) %>%
   st_as_sf(coords = c("Decimal.Longitude", "Decimal.Latitude"), 
-           crs = 4326)
+           crs = 4326) 
 
+# reprojecting points not already in WGS84 to the project's CRS
 cpnwh.wgs84 <- reproject_to_wgs84(cpnwh.filtered) %>%
   rename(was_wgs84 = is_wgs84,
          Original.Geodetic.Datum = Geodetic.Datum)
   
-st_crs(cpnwh.wgs84)
+st_crs(cpnwh.wgs84) #WGS84 as expected
 
+# selecting relevant columns and renaming to match iNat
+cpnwh.wgs84 <- rename(cpnwh.wgs84,
+                      scientific_name = Accepted.Name,
+                      uncertainty = Coordinate.Uncertainty.in.Meters)
+
+inat.all <- rename(inat.all, uncertainty = positional_accuracy)
+
+# combining all records into one large dataframe
+occurrence_data_raw <- bind_rows(inat.all, cpnwh.wgs84) 
 
 # 2.0 Data Adjustments -----------------------------------------------------
 
