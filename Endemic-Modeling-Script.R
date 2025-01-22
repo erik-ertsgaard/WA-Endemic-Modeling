@@ -166,6 +166,7 @@ cpnwh.all <- read.csv("Data/cpnwh_response-data-cleaned.csv")
 #filtering for records that meet occurrence standards and creating a spatial data frame
 cpnwh.filtered <- filter(cpnwh.all, Valid.LatLng == "Y") %>%
   filter(Coordinate.Uncertainty.in.Meters <= 1000) %>%
+  filter(Decimal.Latitude > 45)%>%
   st_as_sf(coords = c("Decimal.Longitude", "Decimal.Latitude"), 
            crs = 4326) 
 
@@ -179,7 +180,9 @@ st_crs(cpnwh.wgs84) #WGS84 as expected
 # selecting relevant columns and renaming to match iNat
 cpnwh.wgs84 <- rename(cpnwh.wgs84,
                       scientific_name = Accepted.Name,
-                      uncertainty = Coordinate.Uncertainty.in.Meters)
+                      uncertainty = Coordinate.Uncertainty.in.Meters) 
+
+cpnwh.wgs84$uncertainty <- as.integer(cpnwh.wgs84$uncertainty)
 
 inat.all <- rename(inat.all, uncertainty = positional_accuracy)
 
