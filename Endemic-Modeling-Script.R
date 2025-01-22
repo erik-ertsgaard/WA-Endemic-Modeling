@@ -142,11 +142,13 @@ inat.all <- rbind(get_inat_obs(taxon_name = "Pedicularis rainierensis"),
                   get_inat_obs(taxon_name = "Tauschia stricklandii"),
                   get_inat_obs(taxon_name = "Chaenactis thompsonii"),
                   get_inat_obs(taxon_name = "Oreocarya thompsonii"),
-                  get_inat_obs(taxon_name = "Lomatium cuspidatum")) %>%
+                  get_inat_obs(taxon_name = "Lomatium cuspidatum"),
+                  get_inat_obs(taxon_name = "Androsace nivalis"),
+                  get_inat_obs(taxon_name = "Claytonia megarhiza nivalis")) %>% #synonym for Wenatchee Mts disjunct
   filter(quality_grade == "research") %>%
   filter(positional_accuracy < 30) %>%
   filter(!is.na(positional_accuracy)) %>%
-  filter(coordinates_obscured == "false") %>% #applying filters to ensure identification and spatial accuracy
+  filter(coordinates_obscured == "false") #applying filters to ensure identification and spatial accuracy
 
 # creating a file for reference in the repository, may be replaced when more response data is appended
 write_csv(inat.all, file = "Data/inat-response-data.csv")
