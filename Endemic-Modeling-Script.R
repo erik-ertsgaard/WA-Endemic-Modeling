@@ -27,6 +27,7 @@ library(sp)
 library(raster)
 library(sf)
 
+
 # 1.2 Load Functions ----
 
 reproject_to_wgs84 <- function(df) {
@@ -75,6 +76,7 @@ reproject_to_wgs84 <- function(df) {
 # 1.3 Load Data ----
 
 # 1.3a Load Predictor Data ----
+
 ## Set working directory
 
 directory <- "C:/.../"
