@@ -15,6 +15,10 @@ install.packages("terra")
 install.packages("sp")
 install.packages("raster")
 install.packages("sf")
+install.packages("rnaturalearth")
+install.packages("ggspatial")
+install.packages("prettymapr")
+
 
 library(biomod2)
 library(tidyverse)
@@ -26,7 +30,9 @@ library(terra)
 library(sp)
 library(raster)
 library(sf)
-
+library(rnaturalearth)
+library(ggspatial)
+library(prettymapr)
 
 # 1.2 Load Functions ----
 
@@ -72,6 +78,31 @@ reproject_to_wgs84 <- function(df) {
   return(df)
 }
 
+remove_nearby_points <- function(df, dist_threshold = 10) {
+  
+  # Create an empty list to store the indices of points to keep
+  keep_indices <- vector("list", length = nrow(df))
+  
+  # Loop over all points and compare distances
+  for (i in 1:nrow(df)) {
+    # Calculate distance between the i-th point and all other points
+    distances <- st_distance(df[i, ], df)
+    
+    # Convert the distances to numeric values (in meters)
+    distances_numeric <- as.numeric(distances)
+    
+    # Check if any point is within the distance threshold (excluding the point itself)
+    close_points <- which(distances_numeric < dist_threshold & distances_numeric > 0)
+    
+    # If no close points, keep this point (it will be added later)
+    if (length(close_points) == 0) {
+      keep_indices[[i]] <- i
+    }
+  }
+  
+  # Return the subset of points to keep
+  return(df[unlist(keep_indices), ])
+}
 
 # 1.3 Load Data ----
 
@@ -166,7 +197,7 @@ cpnwh.all <- read.csv("Data/cpnwh_response-data-cleaned.csv")
 #filtering for records that meet occurrence standards and creating a spatial data frame
 cpnwh.filtered <- filter(cpnwh.all, Valid.LatLng == "Y") %>%
   filter(Coordinate.Uncertainty.in.Meters <= 1000) %>%
-  filter(Decimal.Latitude > 45)%>%
+  filter(Decimal.Latitude > 45) %>%
   st_as_sf(coords = c("Decimal.Longitude", "Decimal.Latitude"), 
            crs = 4326) 
 
@@ -187,7 +218,50 @@ cpnwh.wgs84$uncertainty <- as.integer(cpnwh.wgs84$uncertainty)
 inat.all <- rename(inat.all, uncertainty = positional_accuracy)
 
 # combining all records into one large dataframe
-occurrence_data_raw <- bind_rows(inat.all, cpnwh.wgs84) 
+occurrence_data_raw <- bind_rows(inat.all, cpnwh.wgs84) %>%
+  st_as_sf(coords = geometry, 
+           crs = 4326)
+
+# clipping points' extent to study area
+StudyAreaExtentsMerged <- read_sf("Data/StudyAreaExtentsMerged.shp")
+
+occurrence_data_clipped <- st_intersection(occurrence_data_raw, StudyAreaExtentsMerged)
+
+# correcting names to be consistent with current accepted taxonomy 
+unique(occurrence_data_clipped$scientific_name)
+
+occurrence_data_clipped$scientific_name[occurrence_data_clipped$scientific_name == "Douglasia nivalis"] <- "Androsace nivalis"
+occurrence_data_clipped$scientific_name[occurrence_data_clipped$scientific_name == "Claytonia megarhiza nivalis"] <- "Claytonia megarhiza"
+
+# removing duplicative occurrences within 1 meter of each other
+occurrence_data_cleaned <- occurrence_data_clipped %>%
+  group_by(scientific_name) %>%
+  group_modify(~ remove_nearby_points(.x, dist_threshold = 5)) %>%
+  ungroup() %>%
+  st_as_sf()
+
+## preliminary summary and plots of response data
+summary_response <- occurrence_data_cleaned %>%
+  group_by(scientific_name) %>%
+  summarise(
+    num_occurrences = n())
+
+ggplot() +
+  annotation_map_tile(type = "osm") +
+  geom_sf(data = occurrence_data_cleaned, aes(color = scientific_name), size = 1, alpha = 0.7) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank()) +
+  coord_sf(datum = NA) +  
+  labs(
+    title = "Endemic Species Distributions",
+    color = "Species"
+  ) +
+  facet_wrap(~ scientific_name, ncol = 2)  # Facet by species
 
 # 2.0 Data Adjustments -----------------------------------------------------
 
