@@ -165,7 +165,7 @@ climateNAr(inputFile = paste0(directory, "WenatcheeDEM.tif"),
            varList = "YSM",
            outDir = directory)
 
-# 1.3b Loading Response Data ----
+# 1.3b Load Response Data ----
 
 ## Response Data (Species Occurrences)
 
@@ -263,14 +263,40 @@ ggplot() +
   ) +
   facet_wrap(~ scientific_name, ncol = 2)  # Facet by species
 
+# 1.3c Load Background Data ----
+## Generating background data from iNaturalist to match bias of response data
+
+# vascular plants in Mount Rainier study extent
+rainier.background.data <- get_inat_obs(taxon_name = "Phylum Tracheophyta", #vascular plants
+                                        geo = TRUE, #must be georeferenced
+                                        quality = "research",
+                                        bounds = RainierExtentPolygon,
+                                        maxresults = 10000) %>%
+  filter(positional_accuracy < 30) %>%
+  filter(!is.na(positional_accuracy)) %>%
+  filter(coordinates_obscured == "false") %>%
+  st_as_sf(coords = c("longitude", "latitude"), 
+           crs = 4326) 
+
+# vascular plants in Wenatchee Mts study extent
+wenatchees.background.data <- get_inat_obs(taxon_name = "Phylum Tracheophyta", #vascular plants
+                                           geo = TRUE, #must be georeferenced
+                                           quality = "research",
+                                           bounds = WenatcheeExtentPolygon,
+                                           maxresults = 10000) %>%
+  filter(positional_accuracy < 30) %>%
+  filter(!is.na(positional_accuracy)) %>%
+  filter(coordinates_obscured == "false") %>%
+  st_as_sf(coords = c("longitude", "latitude"), 
+           crs = 4326) 
+
+bm_PseudoAbsences()
+
 # 2.0 Data Adjustments -----------------------------------------------------
 
-# 2.1 Filtering Occurrence Data ----
+# 2.1 Adjusting Predictor Variables ----
 
-library(terra)
-# 2.2 Adjusting Predictor Variables ----
-
-# 2.3 Principle Coordinate Analysis (PCA) ----
+# 2.2 Principle Coordinate Analysis (PCA) ----
 
 # 3.0 Species Distribution Model (SDM) -------------------------------------
 
