@@ -88,7 +88,7 @@ writeRaster(RainierDEM, filename = paste0(directory, "RainierDEM.tif"))
 ###Function for making 15 tiles in each study area. Smaller input area needed for climateNAr
 ExtentTiles <- function(a,b,c) {
   grid <- rast(a, nrows = 3, ncols = 5)
-  makeTiles(b, grid, filename = paste0(c, "Tile.tif"))
+  makeTiles(b, grid, filename = paste0(c, "DEMTile.tif"))
 }
 
 ExtentTiles(SpatVectorRainier, RainierDEM, "Rainier")
@@ -97,7 +97,7 @@ ExtentTiles(SpatVectorWenatchee, WenatcheeDEM, "Wenatchee")
 ###NOTE:Long run time (1hr+) Downscales climate data to ~10m resolution. Outputs folders containing .tifs of PPT01-12, Tmin01-12, Tmax01-12.
 ClimateNAVars <- function(d,e) {
   for (i in 1:15) {
-    climateNAr(inputFile = paste0(directory, d, "Tile", as.character(i), ".tif"),
+    climateNAr(inputFile = paste0(directory, d, "DEMTile", as.character(i), ".tif"),
                periodList = e,
                varList = c(paste0(rep("PPT0", 9), seq(1, 9)), "PPT10", "PPT11", "PPT12",
                            paste0(rep("Tmin0", 9), seq(1, 9)), "Tmin10", "Tmin11", "Tmin12",
@@ -154,7 +154,7 @@ BiovarsMosaic <- function(p) {
   reference <- list()
   
   for (i in 1:15) {
-    reference[[length(reference) + 1]] <- rast(paste0(directory, sub("_.*", "", as.character(substitute(p))), "Tile", as.character(i), ".tif"))
+    reference[[length(reference) + 1]] <- rast(paste0(directory, sub("_.*", "", as.character(substitute(p))), "DEMTile", as.character(i), ".tif"))
   }
   
   Biovars <- list()
