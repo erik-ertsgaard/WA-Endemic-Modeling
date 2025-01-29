@@ -68,9 +68,9 @@ SpatVectorRainier <- vect(RainierExtentPolygon)
 
 ## Digital Elevation Models
 
-WenatcheeW <- rast(paste0(directory, "WenatcheeDEM W GeoTiff USGS One Third Arc Second n48w122 20230307.tif"))
-WenatcheeE <- rast(paste0(directory, "WenatcheeDEM E GeoTiff USGS One Third Arc Second n48w121 20240617.tif"))
-Rainier <- rast(paste0(directory, "RainierDEM GeoTiff USGS One Third Arc Second n47w122 20220919.tif"))
+WenatcheeW <- rast(paste0(directory, "WenatcheeDEM_W _GeoTiff_USGS_One_Third_Arc_Second_n48w122_20230307.tif"))
+WenatcheeE <- rast(paste0(directory, "WenatcheeDEM_E_GeoTiff_USGS_One_Third_Arc_Second_n48w121_20240617.tif"))
+Rainier <- rast(paste0(directory, "RainierDEM_GeoTiff_USGS_One_Third_Arc_Second_n47w122_20220919.tif"))
 
 WenatcheeDEM <- mosaic(WenatcheeW, WenatcheeE) %>% 
   crop(SpatVectorWenatchee) %>% 
