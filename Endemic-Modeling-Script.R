@@ -39,8 +39,8 @@ directory <- "C:/.../"
 
 ## Create Shapefiles and SpatVectors for Study Extent
 
-WenatcheeExtentCoords <- data.frame(x = c(-120.670, -120.670, -121.025, -121.025),
-                                    y = c(47.565, 47.340, 47.340, 47.565))
+WenatcheeExtentCoords <- data.frame(x = c(-120.600, -120.600, -121.135, -121.135),
+                                    y = c(47.635, 47.340, 47.340, 47.635))
 
 WenatcheeExtentPolygon <- Polygon(WenatcheeExtentCoords) %>% 
   list() %>% 
@@ -108,7 +108,9 @@ ClimateNAVars <- function(d,e) {
 }
 
 ClimateNAVars("Rainier", "Normal_1961_1990.nrm")
+ClimateNAVars("Rainier", "8GCMs_ensemble_ssp245_2071-2100.gcm")
 ClimateNAVars("Wenatchee", "Normal_1961_1990.nrm")
+ClimateNAVars("Wenatchee", "8GCMs_ensemble_ssp245_2071-2100.gcm")
 
 
 ###Reads .tif files from ClimateNAVars(). Creates lists of RasterStack objects for PPT, Tmin, Tmax.
@@ -129,8 +131,15 @@ MakeRasterStacks <- function(L,f,g) {
   assign(paste0(f, "_TmaxStacks"), lapply(TmaxStacks, raster::stack), envir = .GlobalEnv)
 }
 
-MakeRasterStacks("Rainier", "R_1961_90", "Normal_1961_1990")
-MakeRasterStacks("Wenatchee", "W_1961_90", "Normal_1961_1990")
+MakeRasterStacks("Rainier", "R_1961_1990", "Normal_1961_1990")
+
+#Check folder name in directory/RainierTile1/ for third argument 
+MakeRasterStacks("Rainier", "R_2071_2100", "####")
+
+MakeRasterStacks("Wenatchee", "W_1961_1990", "Normal_1961_1990")
+
+#Check folder name in directory/WenatcheeTile1/ for third argument 
+MakeRasterStacks("Wenatchee", "W_2071-2100", "####")
 
 ###NOTE:Long run time (30min+). Passes RasterStacks through biovars() to generate 19 Bioclimatic variables. Outputs list of Bioclimatic data tiles. 
 GenerateBioclimaticVariables <- function(h,j,k,m) {
@@ -145,21 +154,17 @@ GenerateBioclimaticVariables <- function(h,j,k,m) {
   assign(paste0(h, "_BiovarsList"), lapply(BiovarsList, terra::rast), envir = .GlobalEnv)
 }
 
-GenerateBioclimaticVariables("Rainier_1961_90", R_1961_90_PrecStacks, R_1961_90_TminStacks, R_1961_90_TmaxStacks)
-GenerateBioclimaticVariables("Wenatchee_1961_90", W_1961_90_PrecStacks, W_1961_90_TminStacks, W_1961_90_TmaxStacks)
+GenerateBioclimaticVariables("Rainier_1961_1990", R_1961_1990_PrecStacks, R_1961_1990_TminStacks, R_1961_1990_TmaxStacks)
+GenerateBioclimaticVariables("Rainier_2071_2100", R_2071_2100_PrecStacks, R_2071_2100_TminStacks, R_2071_2100_TmaxStacks)
+GenerateBioclimaticVariables("Wenatchee_1961_1990", W_1961_1990_PrecStacks, W_1961_1990_TminStacks, W_1961_1990_TmaxStacks)
+GenerateBioclimaticVariables("Wenatchee_2071_2100", W_2071_2100_PrecStacks, W_2071_2100_TminStacks, W_2071_2100_TmaxStacks)
 
 ###Creates mosaic of full study area after resampling to standardize resolution of bioclimatic variable tiles.
 ###Output will be SpatRaster object with the name of the input, minus "List".
-BiovarsMosaic <- function(p) {
-  reference <- list()
-  
-  for (i in 1:15) {
-    reference[[length(reference) + 1]] <- rast(paste0(directory, sub("_.*", "", as.character(substitute(p))), "DEMTile", as.character(i), ".tif"))
-  }
-  
+BiovarsMosaic <- function(p,q) {
   Biovars <- list()
   for (i in 1:15) {
-    Biovars[[length(Biovars) + 1]] <- terra::resample(p[[i]], reference[[i]], method = "bilinear")
+    Biovars[[length(Biovars) + 1]] <- terra::resample(p[[i]], q, method = "bilinear")
   }
   
   name <- as.character(substitute(p))
@@ -168,11 +173,14 @@ BiovarsMosaic <- function(p) {
   
 }
 
-BiovarsMosaic(Rainier_1961_90_BiovarsList)
-BiovarsMosaic(Wenatchee_1961_90_BiovarsList)
+BiovarsMosaic(Rainier_1961_1990_BiovarsList, RainierDEM)
+BiovarsMosaic(Rainier_2071_2100_BiovarsList, RainierDEM)
+BiovarsMosaic(Wenatchee_1961_1990_BiovarsList, WenatcheeDEM)
+BiovarsMosaic(Wenatchee_2071_2100_BiovarsList, WenatcheeDEM)
 
 ###Write to a .tif file-- Make sure to name this how you want
-terra::writeRaster(Rainier_1961_90_Biovars, "Rainier_1961_90_Biovars.tif")
+terra::writeRaster(Rainier_1961_1990_Biovars, "Rainier_1961_1990_Biovars.tif")
+terra::writeRaster(Wenatchee_1961_1990_Biovars, "Wenatchee_1961_1990_Biovars.tif")
 
 ## Response Data (Species Occurrences)
 
@@ -196,7 +204,6 @@ write_csv(inat.all, file = "Data/inat-response-data.csv")
 
 # 2.1 Filtering Occurrence Data ----
 
-library(terra)
 # 2.2 Adjusting Predictor Variables ----
 
 # 2.3 Principle Coordinate Analysis (PCA) ----
