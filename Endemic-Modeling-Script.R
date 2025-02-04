@@ -165,7 +165,7 @@ climateNAr(inputFile = paste0(directory, "WenatcheeDEM.tif"),
            varList = "YSM",
            outDir = directory)
 
-# 1.3b Loading Response Data ----
+# 1.3b Load Response Data ----
 
 ## Response Data (Species Occurrences)
 
@@ -263,12 +263,71 @@ ggplot() +
   ) +
   facet_wrap(~ scientific_name, ncol = 2)  # Facet by species
 
+# 1.3c Load Background Data ----
+## Generating background data from iNaturalist to match bias of response data
+
+# vascular plants in Mount Rainier study extent
+rainier.background.data <- get_inat_obs(taxon_name = "Phylum Tracheophyta", #vascular plants
+                                        geo = TRUE, #must be georeferenced
+                                        quality = "research",
+                                        bounds = RainierExtentPolygon,
+                                        maxresults = 10000) %>%
+  filter(positional_accuracy < 30) %>%
+  filter(!is.na(positional_accuracy)) %>%
+  filter(coordinates_obscured == "false") %>%
+  st_as_sf(coords = c("longitude", "latitude"), 
+           crs = 4326) 
+
+# vascular plants in Wenatchee Mts study extent
+wenatchees.background.data <- get_inat_obs(taxon_name = "Phylum Tracheophyta", #vascular plants
+                                           geo = TRUE, #must be georeferenced
+                                           quality = "research",
+                                           bounds = WenatcheeExtentPolygon,
+                                           maxresults = 10000) %>%
+  filter(positional_accuracy < 30) %>%
+  filter(!is.na(positional_accuracy)) %>%
+  filter(coordinates_obscured == "false") %>%
+  st_as_sf(coords = c("longitude", "latitude"), 
+           crs = 4326) 
+
 # 2.0 Data Adjustments -----------------------------------------------------
 
-# 2.1 Filtering Occurrence Data ----
+# 2.1 Adjusting Predictor Variables ----
 
-library(terra)
-# 2.2 Adjusting Predictor Variables ----
+# 2.2 Adjusting Response Variables ----
+## creating a data frame of occurrence and background data compatible with 'biomod2'
+
+# converting data to a SpatVector for better compatibility with biomod
+occurrence_data_cleaned <- vect(occurrence_data_cleaned)
+
+# adding columns to represent 10 repetitions of background data, with 500 randomly-selected background points each
+for (i in 1:10) {
+  pseudo_absences <- rep(FALSE, nrow(rainier.background.data))  # starting with all rows as false
+  
+  pseudo_absences[sample(1:nrow(rainier.background.data), 500)] <- TRUE  # Set 500 random points to TRUE
+  
+  rainier.background.data[[paste0("PA", i)]] <- pseudo_absences  # Add as new column (e.g., PA_1, PA_2, ...)
+}
+
+# repeating for wenatchees data
+for (i in 1:10) {
+  pseudo_absences <- rep(FALSE, nrow(wenatchees.background.data))  # starting with all rows as false
+  
+  pseudo_absences[sample(1:nrow(wenatchees.background.data), 500)] <- TRUE  # Set 500 random points to TRUE
+  
+  wenatchees.background.data[[paste0("PA", i)]] <- pseudo_absences  # Add as new column (e.g., PA_1, PA_2, ...)
+}
+
+
+# inputting data into the biomod package's formatting function
+BIOMOD_FormatingData(resp.name = "Pedicularis rainierensis",
+                     resp.var = occurrence_data_cleaned[occurrence_data_cleaned$scientific_name == "Pedicularis rainierensis", "geometry"],
+                     expl.var = ,
+                     PA.strategy = "user.defined",
+                     PA.nb.rep = 10,
+                     PA.user.table = rainier.background.data[, c("geometry", "PA1", "PA2", "PA3", "PA4", "PA5", "PA6", "PA7", "PA8", "PA9", "PA10")])
+
+?bm_CrossValidation()
 
 # 2.3 Principle Coordinate Analysis (PCA) ----
 
