@@ -33,42 +33,41 @@ library(stats)
 
 # 1.3 Load Data ----
 
-## Set working directory
+## Set working directory (any desired working directory for writing/reading files)
 
-directory <- "C:/.../"
+directory <- "C:/.../" #eg. "C:/Users/username/WA-Endemic-Modeling/"
+setwd(directory)
 
-## Create Shapefiles and SpatVectors for Study Extent
+## Create SpatVectors and Shapefiles (optional) for Study Extent
 
-WenatcheeExtentCoords <- data.frame(x = c(-120.600, -120.600, -121.135, -121.135),
-                                    y = c(47.635, 47.340, 47.340, 47.635))
-
-WenatcheeExtentPolygon <- Polygon(WenatcheeExtentCoords) %>% 
+WenatcheeExtentPolygon <- data.frame(x = c(-120.600, -120.600, -121.135, -121.135),
+                                     y = c(47.635, 47.340, 47.340, 47.635)) %>% 
+  Polygon() %>% 
   list() %>% 
   Polygons(ID = "Wenatchee Study Extent") %>% 
   list() %>% 
   SpatialPolygons(proj4string = CRS("WGS84"))
 
-shapefile(x = WenatcheeExtentPolygon, file = paste0(directory, "WenatcheeExtent.shp"))
+SpatVectorWenatchee <- vect(WenatcheeExtentPolygon) #Convert polygon to SpatVector class for terra package
 
-SpatVectorWenatchee <- vect(WenatcheeExtentPolygon)
+shapefile(x = WenatcheeExtentPolygon, file = paste0(directory, "WenatcheeExtent.shp")) #Optional-Write as shapefile
 
 
-RainierExtentCoords <- data.frame(x = c(-121.955, -121.955, -121.540, -121.540),
-                                    y = c(46.990, 46.735, 46.735, 46.990))
-
-RainierExtentPolygon <- Polygon(RainierExtentCoords) %>% 
+RainierExtentPolygon <- data.frame(x = c(-121.955, -121.955, -121.540, -121.540),
+                                   y = c(46.990, 46.735, 46.735, 46.990)) %>% 
+  Polygon() %>% 
   list() %>% 
   Polygons(ID = "Rainier Study Extent") %>% 
   list() %>% 
   SpatialPolygons(proj4string = CRS("WGS84"))
 
-shapefile(x = RainierExtentPolygon, file = paste0(directory, "RainierExtent.shp"))
+SpatVectorRainier <- vect(RainierExtentPolygon) #Convert polygon to SpatVector class for terra package
 
-SpatVectorRainier <- vect(RainierExtentPolygon)
+shapefile(x = RainierExtentPolygon, file = paste0(directory, "RainierExtent.shp")) #Optional-Write as shapefile
 
 ## Digital Elevation Models
 
-WenatcheeW <- rast(paste0(directory, "WenatcheeDEM_W _GeoTiff_USGS_One_Third_Arc_Second_n48w122_20230307.tif"))
+WenatcheeW <- rast(paste0(directory, "WenatcheeDEM_W_GeoTiff_USGS_One_Third_Arc_Second_n48w122_20230307.tif"))
 WenatcheeE <- rast(paste0(directory, "WenatcheeDEM_E_GeoTiff_USGS_One_Third_Arc_Second_n48w121_20240617.tif"))
 Rainier <- rast(paste0(directory, "RainierDEM_GeoTiff_USGS_One_Third_Arc_Second_n47w122_20220919.tif"))
 
@@ -121,9 +120,9 @@ MakeRasterStacks <- function(L,f,g) {
   TmaxStacks <- list()
   
   for (i in 1:15) {
-    PrecStacks[[length(PrecStacks) + 1]] <- c(paste0(directory, L, "Tile", as.character(i), "/", g, "/", c(paste0(rep("PPT0", 9), seq(1, 9)), "PPT10", "PPT11", "PPT12"), ".tif"))
-    TminStacks[[length(TminStacks) + 1]] <- c(paste0(directory, L, "Tile", as.character(i), "/", g, "/", c(paste0(rep("Tmin0", 9), seq(1, 9)), "Tmin10", "Tmin11", "Tmin12"), ".tif"))
-    TmaxStacks[[length(TmaxStacks) + 1]] <- c(paste0(directory, L, "Tile", as.character(i), "/", g, "/", c(paste0(rep("Tmax0", 9), seq(1, 9)), "Tmax10", "Tmax11", "Tmax12"), ".tif"))
+    PrecStacks[[length(PrecStacks) + 1]] <- c(paste0(directory, L, "DEMTile", as.character(i), "/", g, "/", c(paste0(rep("PPT0", 9), seq(1, 9)), "PPT10", "PPT11", "PPT12"), ".tif"))
+    TminStacks[[length(TminStacks) + 1]] <- c(paste0(directory, L, "DEMTile", as.character(i), "/", g, "/", c(paste0(rep("Tmin0", 9), seq(1, 9)), "Tmin10", "Tmin11", "Tmin12"), ".tif"))
+    TmaxStacks[[length(TmaxStacks) + 1]] <- c(paste0(directory, L, "DEMTile", as.character(i), "/", g, "/", c(paste0(rep("Tmax0", 9), seq(1, 9)), "Tmax10", "Tmax11", "Tmax12"), ".tif"))
   }
   
   assign(paste0(f, "_PrecStacks"), lapply(PrecStacks, raster::stack), envir = .GlobalEnv)
@@ -134,12 +133,12 @@ MakeRasterStacks <- function(L,f,g) {
 MakeRasterStacks("Rainier", "R_1961_1990", "Normal_1961_1990")
 
 #Check folder name in directory/RainierTile1/ for third argument 
-MakeRasterStacks("Rainier", "R_2071_2100", "####")
+MakeRasterStacks("Rainier", "R_2071_2100", "8GCMs_ensemble_ssp245_2071-2100")
 
 MakeRasterStacks("Wenatchee", "W_1961_1990", "Normal_1961_1990")
 
 #Check folder name in directory/WenatcheeTile1/ for third argument 
-MakeRasterStacks("Wenatchee", "W_2071-2100", "####")
+MakeRasterStacks("Wenatchee", "W_2071_2100", "8GCMs_ensemble_ssp245_2071-2100")
 
 ###NOTE:Long run time (30min+). Passes RasterStacks through biovars() to generate 19 Bioclimatic variables. Outputs list of Bioclimatic data tiles. 
 GenerateBioclimaticVariables <- function(h,j,k,m) {
@@ -180,7 +179,9 @@ BiovarsMosaic(Wenatchee_2071_2100_BiovarsList, WenatcheeDEM)
 
 ###Write to a .tif file-- Make sure to name this how you want
 terra::writeRaster(Rainier_1961_1990_Biovars, "Rainier_1961_1990_Biovars.tif")
+terra::writeRaster(Rainier_2071_2100_Biovars, "Rainier_2071_2100_Biovars.tif")
 terra::writeRaster(Wenatchee_1961_1990_Biovars, "Wenatchee_1961_1990_Biovars.tif")
+terra::writeRaster(Wenatchee_2071_2100_Biovars, "Wenatchee_2071_2100_Biovars.tif")
 
 ## Response Data (Species Occurrences)
 
