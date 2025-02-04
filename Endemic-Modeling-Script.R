@@ -131,13 +131,8 @@ MakeRasterStacks <- function(L,f,g) {
 }
 
 MakeRasterStacks("Rainier", "R_1961_1990", "Normal_1961_1990")
-
-#Check folder name in directory/RainierTile1/ for third argument 
 MakeRasterStacks("Rainier", "R_2071_2100", "8GCMs_ensemble_ssp245_2071-2100")
-
 MakeRasterStacks("Wenatchee", "W_1961_1990", "Normal_1961_1990")
-
-#Check folder name in directory/WenatcheeTile1/ for third argument 
 MakeRasterStacks("Wenatchee", "W_2071_2100", "8GCMs_ensemble_ssp245_2071-2100")
 
 ###NOTE:Long run time (30min+). Passes RasterStacks through biovars() to generate 19 Bioclimatic variables. Outputs list of Bioclimatic data tiles. 
@@ -182,6 +177,9 @@ terra::writeRaster(Rainier_1961_1990_Biovars, "Rainier_1961_1990_Biovars.tif")
 terra::writeRaster(Rainier_2071_2100_Biovars, "Rainier_2071_2100_Biovars.tif")
 terra::writeRaster(Wenatchee_1961_1990_Biovars, "Wenatchee_1961_1990_Biovars.tif")
 terra::writeRaster(Wenatchee_2071_2100_Biovars, "Wenatchee_2071_2100_Biovars.tif")
+
+## Lithology Data
+Lith <- st_read(paste0(directory, "lithologyclip.shp"))
 
 ## Response Data (Species Occurrences)
 
