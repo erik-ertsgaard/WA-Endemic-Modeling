@@ -8,8 +8,6 @@
 install.packages("biomod2")
 install.packages("tidyverse")
 install.packages("rinat")
-#install.packages("rgbif")
-#install.packages("rvest")
 #install ClimateNAr from register.climatena.ca
 install.packages("terra")
 install.packages("sp")
@@ -20,12 +18,11 @@ install.packages("sf")
 install.packages("rnaturalearth")
 install.packages("ggspatial")
 install.packages("prettymapr")
+install.packages("soilDB")
 
 library(biomod2)
 library(tidyverse)
 library(rinat)
-#library(rgbif)
-#library(rvest)
 library(ClimateNAr)
 library(terra)
 library(sp)
@@ -36,6 +33,8 @@ library(sf)
 library(rnaturalearth)
 library(ggspatial)
 library(prettymapr)
+library(soilDB)
+
 
 # 1.2 Load Functions ----
 
@@ -116,7 +115,7 @@ remove_nearby_points <- function(df, dist_threshold = 10) {
 directory <- "C:/.../" #eg. "C:/Users/username/WA-Endemic-Modeling/"
 setwd(directory)
 
-## Create SpatVectors and Shapefiles (optional) for Study Extent
+## Create Shapefiles and SpatVectors for Study Extent
 
 WenatcheeExtentPolygon <- data.frame(x = c(-120.600, -120.600, -121.135, -121.135),
                                      y = c(47.635, 47.340, 47.340, 47.635)) %>% 
