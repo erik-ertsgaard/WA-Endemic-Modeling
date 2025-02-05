@@ -460,6 +460,16 @@ wenatchees.background.data <- get_inat_obs(taxon_name = "Phylum Tracheophyta", #
            crs = 4326) 
 
 # 2.0 Data Adjustments -----------------------------------------------------
+###PCA
+RainierClimateMatrix <- as.matrix(values(Rainier_1961_1990_Biovars))
+
+RainierPCA <- prcomp(na.omit(RainierClimateMatrix), scale. = TRUE)
+
+summary(RainierPCA)
+
+Rainierpcs_1_3_scores <- predict(RainierBiovarsAll, RainierPCA, index = 1:3)
+###
+
 
 # 2.1 Adjusting Predictor Variables ----
 
