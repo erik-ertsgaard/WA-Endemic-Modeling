@@ -257,7 +257,82 @@ terra::writeRaster(Wenatchee_1961_1990_Biovars, "Wenatchee_1961_1990_Biovars.tif
 terra::writeRaster(Wenatchee_2071_2100_Biovars, "Wenatchee_2071_2100_Biovars.tif")
 
 ## Lithology Data
-Lith <- st_read(paste0(directory, "lithologyclip.shp"))
+Lith <- st_read(paste0(directory, "lithologyclip.shp")) %>% 
+  vect() %>% 
+  project("+proj=longlat +datum=WGS84")
+
+categories <- unique(Lith$Map_Unit)
+
+Lith$Map_Unit_ID <- as.numeric(factor(Lith$Map_Unit, levels = categories))
+
+R.lith <- rasterize(Lith, RainierDEM, field = "Map_Unit_ID")
+W.lith <- rasterize(Lith, WenatcheeDEM, field = "Map_Unit_ID")
+
+levels(R.lith) <- data.frame(ID = seq_along(categories), Category = categories)
+levels(W.lith) <- data.frame(ID = seq_along(categories), Category = categories)
+
+## Tree Canopy Cover Data
+R.Canopy <- rast(paste0(directory, "USANLCDTreeCanopyCover_Ra.tif")) %>% 
+  project("+proj=longlat +datum=WGS84") %>% 
+  disagg(fact=5) %>% 
+  resample(RainierDEM, method = "bilinear")
+
+W.Canopy <- rast(paste0(directory, "USANLCDTreeCanopyCover_We.tif")) %>% 
+  project("+proj=longlat +datum=WGS84") %>% 
+  disagg(fact=5) %>% 
+  resample(WenatcheeDEM, method="bilinear")
+
+## Topological Data
+R.TPI.20 <- rast(paste0(directory, "RainierDEM10_TPI_20m.tif"))
+R.TPI.30 <- rast(paste0(directory, "RainierDEM10_TPI_30m.tif"))
+R.TPI.50 <- rast(paste0(directory, "RainierDEM10_TPI_50m.tif"))
+R.TPI.100 <- rast(paste0(directory, "RainierDEM10_TPI_100m.tif")) %>% 
+  project("+proj=longlat +datum=WGS84") %>% 
+  disagg(fact=3) %>% 
+  resample(RainierDEM, method="bilinear")
+R.TPI.300 <- rast(paste0(directory, "RainierDEM10_TPI_300m.tif"))
+R.TPI.500 <- rast(paste0(directory, "RainierDEM10_TPI_500m.tif"))
+
+
+W.TPI.100 <- rast(paste0(directory, "WenatcheesDEM10_TPI100m.tif")) %>% 
+  project("+proj=longlat +datum=WGS84") %>% 
+  disagg(fact=3) %>% 
+  resample(WenatcheeDEM, method="bilinear")
+
+
+R.Slope <- rast(paste0(directory, "Slope_Rainier.tif")) %>% 
+  project("+proj=longlat +datum=WGS84") %>% 
+  disagg(fact=3) %>% 
+  resample(RainierDEM, method="bilinear")
+W.Slope <- rast(paste0(directory, "Slope_Wenatchees.tif")) %>% 
+  project("+proj=longlat +datum=WGS84") %>% 
+  disagg(fact=3) %>% 
+  resample(WenatcheeDEM, method="bilinear")
+
+R.Northness <- rast(paste0(directory, "Northness_Rainier.tif")) %>% 
+  project("+proj=longlat +datum=WGS84") %>% 
+  disagg(fact=3) %>% 
+  resample(RainierDEM, method="bilinear")
+R.Eastness <- rast(paste0(directory, "Eastness_Rainier.tif")) %>% 
+  project("+proj=longlat +datum=WGS84") %>% 
+  disagg(fact=3) %>% 
+  resample(RainierDEM, method="bilinear")
+R.NorthEastness <- rast(paste0(directory, "NorthEastness_Rainier.tif")) %>% 
+  project("+proj=longlat +datum=WGS84") %>% 
+  disagg(fact=3) %>% 
+  resample(RainierDEM, method="bilinear")
+W.Northness <- rast(paste0(directory, "Northness_Wenatchees.tif")) %>% 
+  project("+proj=longlat +datum=WGS84") %>% 
+  disagg(fact=3) %>% 
+  resample(WenatcheeDEM, method="bilinear")
+W.Eastness <- rast(paste0(directory, "Eastness_Wenatchees.tif")) %>% 
+  project("+proj=longlat +datum=WGS84") %>% 
+  disagg(fact=3) %>% 
+  resample(WenatcheeDEM, method="bilinear")
+W.NorthEastness <- rast(paste0(directory, "NorthEastness_Wenatchees.tif")) %>% 
+  project("+proj=longlat +datum=WGS84") %>% 
+  disagg(fact=3) %>% 
+  resample(WenatcheeDEM, method="bilinear")
 
 # 1.3b Load Response Data ----
 
