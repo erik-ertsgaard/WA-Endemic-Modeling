@@ -18,7 +18,12 @@ install.packages("sf")
 install.packages("rnaturalearth")
 install.packages("ggspatial")
 install.packages("prettymapr")
-install.packages("soilDB")
+install.packages("xgboost")
+install.packages("randomForest")
+install.packages("maxnet")
+install.packages("mda")
+install.packages("earth")
+
 
 library(biomod2)
 library(tidyverse)
@@ -33,7 +38,7 @@ library(sf)
 library(rnaturalearth)
 library(ggspatial)
 library(prettymapr)
-library(soilDB)
+library(remotes)
 
 
 # 1.2 Load Functions ----
@@ -72,7 +77,7 @@ reproject_to_wgs84 <- function(df) {
         )
       ) %>%
       # Remove the helper columns
-      select(-is_nad83, -is_nad27)
+      dplyr::select(-is_nad83, -is_nad27)
     
     df <- bind_rows(data_wgs84, data_not_wgs84)
   }
@@ -104,6 +109,58 @@ remove_nearby_points <- function(df, dist_threshold = 10) {
   
   # Return the subset of points to keep
   return(df[unlist(keep_indices), ])
+}
+
+prepare_biomod_data <- function(presence_data, species_name, pseudo_absence_data, env.var) {
+  
+  # Convert the SpatVector to an sf object
+  occurrence_sf <- st_as_sf(presence_data)
+  
+  # Filter the data for the species of interest
+  occurrence_data <<- occurrence_sf %>%
+    filter(scientific_name == species_name) %>%
+    dplyr::select(geometry)  # Keep only the geometry column
+  
+  # Extract coordinates (longitude and latitude) from the geometry column
+  coords <- st_coordinates(occurrence_data)
+  coords <- as.data.frame(coords)  # Convert to data.frame
+  colnames(coords) <- c("Longitude", "Latitude")
+  
+  # Add a "Presence" column with 1 values for all occurrence records
+  coords$Presence <- 1
+  
+  # Extract coordinates from the PA dataset
+  coords.pa <- st_coordinates(pseudo_absence_data$geometry)
+  pseudo_absence_data$Longitude <- coords.pa[, 1]  
+  pseudo_absence_data$Latitude <- coords.pa[, 2]
+  
+  pseudo_absence_data$Presence <- NA  # Add a Presence column to pseudo-absence data with NA values
+  
+  # Combine the occurrence data with pseudo-absence data
+  combined_data <<- bind_rows(coords, pseudo_absence_data)
+  
+  # Format for BIOMOD_FormattingData
+  resp.var <<- combined_data$Presence  # Response variable (1 for presence, NA for pseudo-absence)
+  resp.xy <<- combined_data[, c("Longitude", "Latitude")]  # Coordinates for response variable
+  PA.user.table <- combined_data[, (colnames(combined_data) %in% c("PA1", "PA2", "PA3", "PA4", "PA5", "PA6", "PA7", "PA8", "PA9", "PA10"))]  
+  PA.user.table <<- PA.user.table %>%
+    mutate_all(~ ifelse(is.na(.), TRUE, .))
+  
+  # Input into biomod package's formatting function
+  formatted_data <- BIOMOD_FormatingData(
+    resp.var = resp.var,             # Species presence/absence
+    expl.var = env.var,              # Environmental data 
+    PA.nb.rep = 10,                   # 10 repitions in pseudo-absence table
+    PA.strategy = "user.defined",    # Use your own pseudo-absence table
+    PA.user.table = PA.user.table,   # User-defined pseudo-absence table
+    resp.xy = resp.xy,              # Coordinates of species presence points
+    resp.name = species_name,      # Species name
+    filter.raster = FALSE,           # removing occurrences in the same cell
+    na.rm = FALSE,
+    dir.name = "Modeling/")
+  
+  # Return the formatted data for further use
+  return(formatted_data)
 }
 
 # 1.3 Load Data ----
@@ -475,9 +532,6 @@ Rainierpcs_1_3_scores <- predict(RainierBiovarsAll, RainierPCA, index = 1:3)
 # 2.2 Adjusting Response Variables ----
 ## creating a data frame of occurrence and background data compatible with 'biomod2'
 
-# converting data to a SpatVector for better compatibility with biomod
-occurrence_data_cleaned <- vect(occurrence_data_cleaned)
-
 # adding columns to represent 10 repetitions of background data, with 500 randomly-selected background points each
 for (i in 1:10) {
   pseudo_absences <- rep(FALSE, nrow(rainier.background.data))  # starting with all rows as false
@@ -496,16 +550,34 @@ for (i in 1:10) {
   wenatchees.background.data[[paste0("PA", i)]] <- pseudo_absences  # Add as new column (e.g., PA_1, PA_2, ...)
 }
 
+RainierDEM <- rast("Data/RainierDEM10.tif")
+WenatcheeDEM <- rast("Data/WenatcheeDEM10.tif")
 
-# inputting data into the biomod package's formatting function
-BIOMOD_FormatingData(resp.name = "Pedicularis rainierensis",
-                     resp.var = occurrence_data_cleaned[occurrence_data_cleaned$scientific_name == "Pedicularis rainierensis", "geometry"],
-                     expl.var = ,
-                     PA.strategy = "user.defined",
-                     PA.nb.rep = 10,
-                     PA.user.table = rainier.background.data[, c("geometry", "PA1", "PA2", "PA3", "PA4", "PA5", "PA6", "PA7", "PA8", "PA9", "PA10")])
+bm.pera <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
+                               species_name = "Pedicularis rainierensis",
+                               pseudo_absence_data = rainier.background.data,
+                               env.var = RainierDEM)
 
-?bm_CrossValidation()
+bm.anni <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
+                               species_name = "Androsace nivalis",
+                               pseudo_absence_data = wenatchees.background.data,
+                               env.var = WenatcheeDEM)
+
+bm_ModelingOptions(data.type = "binary",
+                   strategy = "bigboss",
+                   bm.format = bm.pera, 
+                   models = c("ANN", "CTA", "FDA", "GAM", "GBM", "GLM", "MARS", "MAXENT", "MAXNET", "RF",
+                              "SRE", "XGBOOST"))
+
+pera.model.glm <- BIOMOD_Modeling(bm.format = bm.pera,
+                                  models = c("GLM", "GAM"),
+                                  CV.strategy = "random",
+                                  CV.nb.rep = 3,
+                                  CV.perc = 0.8,
+                                  CV.do.full.models = TRUE,
+                                  metric.eval = c("TSS", "ROC"))
+
+
 
 # 2.3 Principle Coordinate Analysis (PCA) ----
 
