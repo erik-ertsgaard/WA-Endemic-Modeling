@@ -321,27 +321,32 @@ R.Northness <- rast(paste0(directory, "Northness_Rainier.tif")) %>%
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=3) %>% 
   resample(RainierDEM, method="bilinear")
+names(R.Northness) <- "Northness"
 
 R.Eastness <- rast(paste0(directory, "Eastness_Rainier.tif")) %>% 
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=3) %>% 
   resample(RainierDEM, method="bilinear")
 names(R.Eastness) <- "Eastness"
+
 R.NorthEastness <- rast(paste0(directory, "NorthEastness_Rainier.tif")) %>% 
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=3) %>% 
   resample(RainierDEM, method="bilinear")
 names(R.NorthEastness) <- "NorthEastness"
+
 W.Northness <- rast(paste0(directory, "Northness_Wenatchees.tif")) %>% 
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=3) %>% 
   resample(WenatcheeDEM, method="bilinear")
 names(W.Northness) <- "Northness"
+
 W.Eastness <- rast(paste0(directory, "Eastness_Wenatchees.tif")) %>% 
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=3) %>% 
   resample(WenatcheeDEM, method="bilinear")
 names(W.Eastness) <- "Eastness"
+
 W.NorthEastness <- rast(paste0(directory, "NorthEastness_Wenatchees.tif")) %>% 
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=3) %>% 
@@ -353,16 +358,16 @@ names(WenatcheeDEM) <- "Elevation"
 
 ##Generate Principal Components for Model Input
 
-R_1961_1990_PCAraster <- c(Rainier_1961_1990_Biovars, RainierDEM, R.Canopy, R.TPI.100, R.Slope, R.Northness, R.Eastness, R.NorthEastness) %>% 
+R_1961_1990_PCAraster <- c(Rainier_1961_1990_Biovars, RainierDEM, R.Canopy, R.TPI.100, R.Slope, R.Northness, R.Eastness, R.NorthEastness)
 R_1961_1990_PCAmatrix <- as.matrix(values(R_1961_1990_PCAraster))
 
-R_2071_2100_PCAraster <- c(Rainier_2071_2100_Biovars, RainierDEM, R.Canopy, R.TPI.100, R.Slope, R.Northness, R.Eastness, R.NorthEastness) %>% 
+R_2071_2100_PCAraster <- c(Rainier_2071_2100_Biovars, RainierDEM, R.Canopy, R.TPI.100, R.Slope, R.Northness, R.Eastness, R.NorthEastness)
 R_2071_2100_PCAmatrix <- as.matrix(values(R_2071_2100_PCAraster))
 
-W_1961_1990_PCAraster <- c(Wenatchee_1961_1990_Biovars, WenatcheeDEM, W.Canopy, W.TPI.100, W.Slope, W.Northness, W.Eastness, W.NorthEastness) %>% 
+W_1961_1990_PCAraster <- c(Wenatchee_1961_1990_Biovars, WenatcheeDEM, W.Canopy, W.TPI.100, W.Slope, W.Northness, W.Eastness, W.NorthEastness)
 W_1961_1990_PCAmatrix <- as.matrix(values(W_1961_1990_PCAraster))
 
-W_2071_2100_PCAraster <- c(Wenatchee_2071_2100_Biovars, WenatcheeDEM, W.Canopy, W.TPI.100, W.Slope, W.Northness, W.Eastness, W.NorthEastness) %>% 
+W_2071_2100_PCAraster <- c(Wenatchee_2071_2100_Biovars, WenatcheeDEM, W.Canopy, W.TPI.100, W.Slope, W.Northness, W.Eastness, W.NorthEastness)
 W_2071_2100_PCAmatrix <- as.matrix(values(W_2071_2100_PCAraster))
 
 ###PCA
