@@ -20,6 +20,7 @@ install.packages("sf")
 install.packages("rnaturalearth")
 install.packages("ggspatial")
 install.packages("prettymapr")
+install.packages("vegan")
 
 library(biomod2)
 library(tidyverse)
@@ -36,6 +37,7 @@ library(sf)
 library(rnaturalearth)
 library(ggspatial)
 library(prettymapr)
+library(vegan)
 
 # 1.2 Load Functions ----
 
@@ -271,16 +273,20 @@ W.lith <- rasterize(Lith, WenatcheeDEM, field = "Map_Unit_ID")
 levels(R.lith) <- data.frame(ID = seq_along(categories), Category = categories)
 levels(W.lith) <- data.frame(ID = seq_along(categories), Category = categories)
 
+##
+
 ## Tree Canopy Cover Data
 R.Canopy <- rast(paste0(directory, "USANLCDTreeCanopyCover_Ra.tif")) %>% 
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=5) %>% 
   resample(RainierDEM, method = "bilinear")
+names(R.Canopy) <- "Tree Canopy Cover"
 
 W.Canopy <- rast(paste0(directory, "USANLCDTreeCanopyCover_We.tif")) %>% 
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=5) %>% 
   resample(WenatcheeDEM, method="bilinear")
+names(W.Canopy) <- "Tree Canopy Cover"
 
 ## Topological Data
 R.TPI.20 <- rast(paste0(directory, "RainierDEM10_TPI_20m.tif"))
@@ -290,6 +296,7 @@ R.TPI.100 <- rast(paste0(directory, "RainierDEM10_TPI_100m.tif")) %>%
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=3) %>% 
   resample(RainierDEM, method="bilinear")
+names(R.TPI.100) <- "TPI"
 R.TPI.300 <- rast(paste0(directory, "RainierDEM10_TPI_300m.tif"))
 R.TPI.500 <- rast(paste0(directory, "RainierDEM10_TPI_500m.tif"))
 
@@ -298,6 +305,7 @@ W.TPI.100 <- rast(paste0(directory, "WenatcheesDEM10_TPI100m.tif")) %>%
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=3) %>% 
   resample(WenatcheeDEM, method="bilinear")
+names(W.TPI.100) <- "TPI"
 
 
 R.Slope <- rast(paste0(directory, "Slope_Rainier.tif")) %>% 
@@ -313,26 +321,69 @@ R.Northness <- rast(paste0(directory, "Northness_Rainier.tif")) %>%
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=3) %>% 
   resample(RainierDEM, method="bilinear")
+
 R.Eastness <- rast(paste0(directory, "Eastness_Rainier.tif")) %>% 
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=3) %>% 
   resample(RainierDEM, method="bilinear")
+names(R.Eastness) <- "Eastness"
 R.NorthEastness <- rast(paste0(directory, "NorthEastness_Rainier.tif")) %>% 
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=3) %>% 
   resample(RainierDEM, method="bilinear")
+names(R.NorthEastness) <- "NorthEastness"
 W.Northness <- rast(paste0(directory, "Northness_Wenatchees.tif")) %>% 
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=3) %>% 
   resample(WenatcheeDEM, method="bilinear")
+names(W.Northness) <- "Northness"
 W.Eastness <- rast(paste0(directory, "Eastness_Wenatchees.tif")) %>% 
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=3) %>% 
   resample(WenatcheeDEM, method="bilinear")
+names(W.Eastness) <- "Eastness"
 W.NorthEastness <- rast(paste0(directory, "NorthEastness_Wenatchees.tif")) %>% 
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=3) %>% 
   resample(WenatcheeDEM, method="bilinear")
+names(W.NorthEastness) <- "NorthEastness"
+
+names(RainierDEM) <- "Elevation"
+names(WenatcheeDEM) <- "Elevation"
+
+##Generate Principal Components for Model Input
+
+R_1961_1990_PCAraster <- c(Rainier_1961_1990_Biovars, RainierDEM, R.Canopy, R.TPI.100, R.Slope, R.Northness, R.Eastness, R.NorthEastness) %>% 
+R_1961_1990_PCAmatrix <- as.matrix(values(R_1961_1990_PCAraster))
+
+R_2071_2100_PCAraster <- c(Rainier_2071_2100_Biovars, RainierDEM, R.Canopy, R.TPI.100, R.Slope, R.Northness, R.Eastness, R.NorthEastness) %>% 
+R_2071_2100_PCAmatrix <- as.matrix(values(R_2071_2100_PCAraster))
+
+W_1961_1990_PCAraster <- c(Wenatchee_1961_1990_Biovars, WenatcheeDEM, W.Canopy, W.TPI.100, W.Slope, W.Northness, W.Eastness, W.NorthEastness) %>% 
+W_1961_1990_PCAmatrix <- as.matrix(values(W_1961_1990_PCAraster))
+
+W_2071_2100_PCAraster <- c(Wenatchee_2071_2100_Biovars, WenatcheeDEM, W.Canopy, W.TPI.100, W.Slope, W.Northness, W.Eastness, W.NorthEastness) %>% 
+W_2071_2100_PCAmatrix <- as.matrix(values(W_2071_2100_PCAraster))
+
+###PCA
+Wenatchee_1961_1990_PCA <- prcomp(na.omit(W_1961_1990_PCAmatrix), scale. = TRUE)
+
+saveRDS(Wenatchee_1961_1990_PCA, "Wenatchee_1961_1990_PCA.rds")
+saveRDS(Wenatchee_1961_1990_PCAinput, "Wenatchee_PCAinput.rds")
+
+# Load later with:
+matrix_data <- readRDS("Wenatchee_PCAinput.rds")
+
+WenPCAscores <- scores(Wenatchee_1961_1990_PCA)
+
+WenEnvfit <- envfit(Wenatchee_1961_1990_PCA, Wenatchee_1961_1990_PCAMatrix, WenPCAscores, permutations = 0)
+
+summary(Wenatchee_1961_1990_PCA)
+
+# Project PCA result back onto a raster with a layer for each PC
+Wenatchee_1961_1990PC1.6_scores <- predict(W_1961_1990_PCAraster, Wenatchee_1961_1990_PCA, index = 1:6)
+
+###
 # 1.3b Load Response Data ----
 
 ## Response Data (Species Occurrences)
