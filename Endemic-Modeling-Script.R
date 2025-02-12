@@ -156,7 +156,7 @@ prepare_biomod_data <- function(presence_data, species_name, pseudo_absence_data
     resp.xy = resp.xy,              # Coordinates of species presence points
     resp.name = species_name,      # Species name
     filter.raster = FALSE,           # removing occurrences in the same cell
-    na.rm = FALSE,
+    na.rm = TRUE,
     dir.name = "Modeling/")
   
   # Return the formatted data for further use
@@ -550,33 +550,34 @@ for (i in 1:10) {
   wenatchees.background.data[[paste0("PA", i)]] <- pseudo_absences  # Add as new column (e.g., PA_1, PA_2, ...)
 }
 
-RainierDEM <- rast("Data/RainierDEM10.tif")
-WenatcheeDEM <- rast("Data/WenatcheeDEM10.tif")
 
 bm.pera <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
                                species_name = "Pedicularis rainierensis",
                                pseudo_absence_data = rainier.background.data,
-                               env.var = RainierDEM)
+                               env.var = Rainier_BV_future)
 
 bm.anni <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
                                species_name = "Androsace nivalis",
                                pseudo_absence_data = wenatchees.background.data,
-                               env.var = WenatcheeDEM)
+                               env.var = Wenatchee_BV_Current)
 
-bm_ModelingOptions(data.type = "binary",
-                   strategy = "bigboss",
-                   bm.format = bm.pera, 
-                   models = c("ANN", "CTA", "FDA", "GAM", "GBM", "GLM", "MARS", "MAXENT", "MAXNET", "RF",
-                              "SRE", "XGBOOST"))
+bm_ModelingOptions(bm.format = bm.anni, 
+                   data.type = "binary",
+                   models = c("GLM", "GBM", "XGBOOST", "RF", "MAXNET"),
+                   strategy = "bigboss")
 
-pera.model.glm <- BIOMOD_Modeling(bm.format = bm.pera,
-                                  models = c("GLM", "GAM"),
-                                  CV.strategy = "random",
-                                  CV.nb.rep = 3,
-                                  CV.perc = 0.8,
-                                  CV.do.full.models = TRUE,
-                                  metric.eval = c("TSS", "ROC"))
+anni.modeling <- BIOMOD_Modeling(bm.format = bm.anni,
+                                 models = c("GLM", "GBM", "XGBOOST", "RF", "MAXNET"),
+                                 models.pa = as.list(colnames(bm.anni@PA.table)),
+                                 CV.strategy = "kfold",
+                                 CV.k = 3,
+                                 CV.nb.rep = 2,
+                                 CV.do.full.models = TRUE,
+                                 metric.eval = c("TSS", "ROC"),
+                                 OPT.strategy = "bigboss",
+                                 OPT.data.type = "binary")
 
+cl <- get_calib_lines(anni.modeling)
 
 
 # 2.3 Principle Coordinate Analysis (PCA) ----
