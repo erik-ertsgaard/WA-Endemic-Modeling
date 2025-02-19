@@ -28,7 +28,7 @@ install.packages("earth")
 library(biomod2)
 library(tidyverse)
 library(rinat)
-library(ClimateNAr)
+#library(ClimateNAr)
 library(terra)
 library(sp)
 library(raster)
@@ -38,7 +38,8 @@ library(sf)
 library(rnaturalearth)
 library(ggspatial)
 library(prettymapr)
-library(remotes)
+library(devtools)
+library(biomod2)
 
 
 # 1.2 Load Functions ----
@@ -462,7 +463,8 @@ occurrence_data_clipped$scientific_name[occurrence_data_clipped$scientific_name 
 occurrence_data_cleaned <- occurrence_data_clipped %>%
   group_by(scientific_name) %>%
   group_modify(~ remove_nearby_points(.x, dist_threshold = 5)) %>%
-  ungroup() %>%
+  ungroup() %>% 
+  filter(uncertainty <= 1000) %>%
   st_as_sf()
 
 ## preliminary summary and plots of response data
@@ -550,25 +552,45 @@ for (i in 1:10) {
   wenatchees.background.data[[paste0("PA", i)]] <- pseudo_absences  # Add as new column (e.g., PA_1, PA_2, ...)
 }
 
+Wenatchee_BV_Current <- rast("Data/Large-Files/Wenatchee_1961_1990_Biovars.tif")
+
+Rainier_expl_full <- rast("Data/Large-Files/Rainier-expl-var-raster.tif")
 
 bm.pera <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
                                species_name = "Pedicularis rainierensis",
                                pseudo_absence_data = rainier.background.data,
-                               env.var = Rainier_BV_future)
+                               env.var = Rainier_expl_full)
+
+bm.tast <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
+                               species_name = "Tauschia stricklandii",
+                               pseudo_absence_data = rainier.background.data,
+                               env.var = Rainier_expl_full)
+
+bm.cacr <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
+                               species_name = "Castilleja cryptantha",
+                               pseudo_absence_data = rainier.background.data,
+                               env.var = Rainier_expl_full)
 
 bm.anni <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
                                species_name = "Androsace nivalis",
                                pseudo_absence_data = wenatchees.background.data,
                                env.var = Wenatchee_BV_Current)
 
-bm_ModelingOptions(bm.format = bm.anni, 
-                   data.type = "binary",
-                   models = c("GLM", "GBM", "XGBOOST", "RF", "MAXNET"),
-                   strategy = "bigboss")
 
 anni.modeling <- BIOMOD_Modeling(bm.format = bm.anni,
-                                 models = c("GLM", "GBM", "XGBOOST", "RF", "MAXNET"),
-                                 models.pa = as.list(colnames(bm.anni@PA.table)),
+                                 models = c("GLM", "RF"),
+                                 models.pa = NULL,
+                                 CV.strategy = "kfold",
+                                 CV.k = 3,
+                                 CV.nb.rep = 2,
+                                 CV.do.full.models = TRUE,
+                                 metric.eval = c("TSS", "ROC"),
+                                 OPT.strategy = "bigboss",
+                                 OPT.data.type = "binary")
+
+pera.modeling <- BIOMOD_Modeling(bm.format = bm.pera,
+                                 models = c("GLM", "RF"),
+                                 models.pa = NULL,
                                  CV.strategy = "kfold",
                                  CV.k = 3,
                                  CV.nb.rep = 2,
