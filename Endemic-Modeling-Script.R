@@ -21,6 +21,10 @@ install.packages("rnaturalearth")
 install.packages("ggspatial")
 install.packages("prettymapr")
 install.packages("vegan")
+install.packages("hexbin")
+install.packages("ggnewscale")
+install.packages("irlba")
+install.packages("ggrepel")
 
 library(biomod2)
 library(tidyverse)
@@ -38,6 +42,10 @@ library(rnaturalearth)
 library(ggspatial)
 library(prettymapr)
 library(vegan)
+library(hexbin)
+library(ggnewscale)
+library(irlba)
+library(ggrepel)
 
 # 1.2 Load Functions ----
 
@@ -268,10 +276,29 @@ categories <- unique(Lith$Map_Unit)
 Lith$Map_Unit_ID <- as.numeric(factor(Lith$Map_Unit, levels = categories))
 
 R.lith <- rasterize(Lith, RainierDEM, field = "Map_Unit_ID")
+names(R.lith) <- "Lithology"
 W.lith <- rasterize(Lith, WenatcheeDEM, field = "Map_Unit_ID")
+names(W.lith) <- "Lithology"
 
 levels(R.lith) <- data.frame(ID = seq_along(categories), Category = categories)
 levels(W.lith) <- data.frame(ID = seq_along(categories), Category = categories)
+
+## Soils Data
+R.soils <- st_read(paste0(directory, "Rainier_Soil_Types.shp")) %>% 
+  mutate(comp_tx_86 = ifelse(is.na(comp_tx_86), "other", comp_tx_86)) %>%
+  vect() %>% 
+  project("+proj=longlat +datum=WGS84") %>% 
+  rasterize(RainierDEM, field = "comp_tx_86")
+names(R.soils) <- "Soil Type"
+
+W.categorical <- c(R.soils, R.lith)
+
+W.soils <- st_read(paste0(directory, "Wenatchees_Soil_Types.shp")) %>% 
+  mutate(comp_tx_86 = ifelse(is.na(comp_tx_86), "other", comp_tx_86)) %>%
+  vect() %>% 
+  project("+proj=longlat +datum=WGS84") %>% 
+  rasterize(WenatcheeDEM, field = "comp_tx_86")
+names(W.soils) <- "Soil Type"
 
 ##
 
@@ -372,12 +399,17 @@ W_2071_2100_PCAmatrix <- as.matrix(values(W_2071_2100_PCAraster))
 
 ###PCA
 Wenatchee_1961_1990_PCA <- prcomp(na.omit(W_1961_1990_PCAmatrix), scale. = TRUE)
+Wenatchee_2071_2100_PCA <- prcomp(na.omit(W_2071_2100_PCAmatrix), scale. = TRUE)
+Rainier_1961_1990_PCA <- prcomp(na.omit(R_1961_1990_PCAmatrix), scale. = TRUE)
+Rainier_2071_2100_PCA <- prcomp(na.omit(R_2071_2100_PCAmatrix), scale. = TRUE)
 
 saveRDS(Wenatchee_1961_1990_PCA, "Wenatchee_1961_1990_PCA.rds")
-saveRDS(Wenatchee_1961_1990_PCAinput, "Wenatchee_PCAinput.rds")
+saveRDS(Wenatchee_2071_2100_PCA, "Wenatchee_2071_2100_PCA.rds")
+saveRDS(Rainier_1961_1990_PCA, "Rainier_1961_1990_PCA.rds")
+saveRDS(Rainier_2071_2100_PCA, "Rainier_2071_2100_PCA.rds")
 
 # Load later with:
-matrix_data <- readRDS("Wenatchee_PCAinput.rds")
+WenatcheeRDS <- readRDS("Wenatchee_1961_1990_PCA.rds")
 
 WenPCAscores <- scores(Wenatchee_1961_1990_PCA)
 
@@ -387,6 +419,16 @@ summary(Wenatchee_1961_1990_PCA)
 
 # Project PCA result back onto a raster with a layer for each PC
 Wenatchee_1961_1990PC1.6_scores <- predict(W_1961_1990_PCAraster, Wenatchee_1961_1990_PCA, index = 1:6)
+
+Rainier_1961_1990_PC1.6_scores <- predict(R_1961_1990_PCAraster, Rainier_1961_1990_PCA, index = 1:6)
+
+
+# Combine First 6 Principal Components, Lithology, and Soils layers into single raster
+
+R.expl.var <- c(Rainier_1961_1990_PC1.6_scores, R.lith, R.soils)
+
+
+writeRaster(R.expl.var, paste0(directory, "Rainier-expl-var-raster.tif"), datatype = c("FLT4S", "INT1U"), overwrite = TRUE)
 
 ###
 # 1.3b Load Response Data ----
@@ -554,6 +596,186 @@ BIOMOD_FormatingData(resp.name = "Pedicularis rainierensis",
 ?bm_CrossValidation()
 
 # 2.3 Principle Coordinate Analysis (PCA) ----
+
+# Load Occurrence Data
+Occurrence <- read_csv(paste0(directory, "all-occurence-data_cleaned_latlon.csv")) %>% 
+  mutate(Latitude=as.numeric(Latitude)) %>% 
+  mutate(Longitude=as.numeric(Longitude)) %>% 
+  select(scientific_name, Longitude, Latitude) %>% 
+  na.omit()
+
+# Rainier Climate PCA
+
+R_CurrentClimate_matrix <- as.matrix(Rainier_1961_1990_Biovars)
+R_FutureClimate_matrix <- as.matrix(Rainier_2071_2100_Biovars)
+
+R_ClimateMatrix <- rbind(R_CurrentClimate_matrix, R_FutureClimate_matrix)
+
+# Create a grouping factor: first raster labeled as "Current", second as "Future (2071-2100)"
+R_Time_period_labels <- factor(c(rep("Current", nrow(R_CurrentClimate_matrix)), rep("Future (2071-2100)", nrow(R_FutureClimate_matrix))))
+
+#Run PCA (This function only calculates the first 2 PCs)
+R_Climate_PCA <- prcomp_irlba(R_ClimateMatrix, n = 2, center = TRUE, scale. = TRUE)
+
+# Extract first two principal components as a dataframe
+R_Climate_PCA_df <- data.frame(
+  PC1 = R_Climate_PCA$x[,1],
+  PC2 = R_Climate_PCA$x[,2],
+  Source = R_Time_period_labels  # Label data source
+)
+
+# Occurrence Data
+R_Occurrence <- filter(Occurrence, scientific_name == "Pedicularis rainierensis" | 
+                                   scientific_name == "Castilleja cryptantha" | 
+                                   scientific_name == "Tauschia stricklandii")
+
+R_cell_indices <- as.matrix(R_Occurrence[, c("Longitude", "Latitude")]) %>% # Convert to matrix for cell lookup
+  cellFromXY(Rainier_1961_1990_Biovars, .)
+
+R_Occurrence_pcs <- as.data.frame(R_Climate_PCA$x[R_cell_indices, 1:2]) # Extract PCA values (PC1 and PC2) for these cells
+R_Occurrence_pcs$scientific_name <- R_Occurrence$scientific_name  # Keep species info
+
+
+# Plot
+RainierClimatePCAplot <- ggplot() +
+  # Hexbin for Current Climate (red gradient)
+  geom_hex(data = subset(R_Climate_PCA_df, Source == "Current"),  
+           aes(x = PC1, y = PC2, fill = after_stat(count)),  
+           bins = 50, alpha = 0.5) +
+  scale_fill_gradient(low = "lightgray", high = "black", name = "Current Density") +
+  
+  # Reset the fill scale before adding Future Climate
+  new_scale_fill() +
+  
+  # Hexbin for Future Climate (gray gradient)
+  geom_hex(data = subset(R_Climate_PCA_df, Source == "Future (2071-2100)"),  
+           aes(x = PC1, y = PC2, fill = after_stat(count)),  
+           bins = 50, alpha = 0.5) +
+  scale_fill_gradient(low = "lightpink", high = "darkred", name = "Future Density") +
+  
+  # Manual Colors for Taxa
+  scale_color_manual(values = c("blue", "darkgreen", "purple")) +
+  
+  # Points for Rainier Occurrence (highlighted taxa)
+  geom_point(data = R_Occurrence_pcs,  
+             aes(x = PC1, y = PC2, color = scientific_name), size = 3, shape = 1) +
+  
+  # Ellipses for Highlighted Taxa
+  stat_ellipse(data = R_Occurrence_pcs,  
+               aes(x = PC1, y = PC2, color = scientific_name),  
+               level = 0.95, size = 1.2) +
+  
+  new_scale_color() +
+  
+  # Ellipses for Current and Future Climate Envelopes
+  stat_ellipse(data = R_Climate_PCA_df,  
+               aes(x = PC1, y = PC2, color = Source),  
+               level = 0.95, size = 1.2) + 
+  scale_color_manual(values = c("Current" = "black", "Future (2071-2100)" = "darkred")) +
+  
+  theme_minimal() +
+  theme(legend.position = "top",
+        panel.grid = element_blank()) +  # Removes all grid lines
+  labs(title = "Hexbin PCA Plot with Highlighted Taxa & Density Ellipses",
+       x = "PC1", y = "PC2", fill = "Density", color = "Taxa", linetype = "Climate Period")
+
+# Wenatchee Climate PCA
+
+W_CurrentClimate_matrix <- as.matrix(Wenatchee_1961_1990_Biovars)
+W_FutureClimate_matrix <- as.matrix(Wenatchee_2071_2100_Biovars)
+
+W_ClimateMatrix <- rbind(W_CurrentClimate_matrix, W_FutureClimate_matrix)
+
+# Create a grouping factor: first raster labeled as "Current", second as "Future (2071-2100)"
+W_Time_period_labels <- factor(c(rep("Current", nrow(W_CurrentClimate_matrix)), rep("Future (2071-2100)", nrow(W_FutureClimate_matrix))))
+
+#Run PCA (This function only calculates the first 2 PCs)
+W_Climate_PCA <- prcomp_irlba(W_ClimateMatrix, n = 2, center = TRUE, scale. = TRUE)
+
+# Extract first two principal components as a dataframe
+W_Climate_PCA_df <- data.frame(
+  PC1 = W_Climate_PCA$x[,1],
+  PC2 = W_Climate_PCA$x[,2],
+  Source = W_Time_period_labels  # Label data source
+)
+
+# Occurrence Data
+W_Occurrence <- filter(Occurrence, scientific_name == "Androsace nivalis" | 
+                                   scientific_name == "Chaenactis thompsonii" | 
+                                   scientific_name == "Claytonia megarhiza" | 
+                                   scientific_name == "Lomatium cuspidatum" | 
+                                   scientific_name == "Oreocarya thompsonii")
+
+W_cell_indices <- as.matrix(W_Occurrence[, c("Longitude", "Latitude")]) %>% # Convert to matrix for cell lookup
+  cellFromXY(Wenatchee_1961_1990_Biovars, .)
+
+W_Occurrence_pcs <- as.data.frame(W_Climate_PCA$x[W_cell_indices, 1:2]) %>% # Extract PCA values (PC1 and PC2) for these cells and bring in taxon names
+  mutate(scientific_name = W_Occurrence$scientific_name)
+
+# Plot
+WenatcheeClimatePCAplot <- ggplot() +
+  # Hexbin for Current Climate (red gradient)
+  geom_hex(data = subset(W_Climate_PCA_df, Source == "Current"),  
+           aes(x = PC1, y = PC2, fill = after_stat(count)),  
+           bins = 50, alpha = 0.5) +
+  scale_fill_gradient(low = "lightgray", high = "black", name = "Current Density") +
+  
+  # Reset the fill scale before adding Future Climate
+  new_scale_fill() +
+  
+  # Hexbin for Future Climate (gray gradient)
+  geom_hex(data = subset(W_Climate_PCA_df, Source == "Future (2071-2100)"),  
+           aes(x = PC1, y = PC2, fill = after_stat(count)),  
+           bins = 50, alpha = 0.5) +
+  scale_fill_gradient(low = "lightpink", high = "darkred", name = "Future Density") +
+  
+  # Manual Colors for Taxa
+  scale_color_manual(values = c("blue", "darkgreen", "purple", "orange", "cyan")) +
+  
+  # Points for Rainier Occurrence (highlighted taxa)
+  geom_point(data = W_Occurrence_pcs,  
+             aes(x = PC1, y = PC2, color = scientific_name), size = 3, shape = 1) +
+  
+  # Ellipses for Highlighted Taxa
+  stat_ellipse(data = W_Occurrence_pcs,  
+               aes(x = PC1, y = PC2, color = scientific_name),  
+               level = 0.95, size = 1.2) +
+  
+  new_scale_color() +
+  
+  # Ellipses for Current and Future Climate Envelopes
+  stat_ellipse(data = W_Climate_PCA_df,  
+               aes(x = PC1, y = PC2, color = Source),  
+               level = 0.95, size = 1.2) + 
+  scale_color_manual(values = c("Current" = "black", "Future (2071-2100)" = "darkred")) +
+  
+  theme_minimal() +
+  theme(legend.position = "top",
+        panel.grid = element_blank()) +  # Removes all grid lines
+  labs(title = "Hexbin PCA Plot with Highlighted Taxa & Density Ellipses",
+       x = "PC1", y = "PC2", fill = "Density", color = "Taxa", linetype = "Climate Period")
+
+# Biplot for interpretation
+
+W_loadings <- W_Climate_PCA$rotation
+
+# Extract the first two components of the loadings for plotting
+W_loadings_df <- as.data.frame(W_loadings[, 1:2])
+W_loadings_df$Variable <- rownames(W_loadings_df)
+
+# Scale loadings for better visualization (optional)
+W_loadings_df$PC1 <- W_loadings_df$PC1 * 5
+W_loadings_df$PC2 <- W_loadings_df$PC2 * 5
+
+# Plot vectors with better label placement
+W_Climate_Biplot <- ggplot(W_loadings_df, aes(x = 0, y = 0, xend = PC1, yend = PC2, label = Variable)) +
+  geom_segment(arrow = arrow(length = unit(0.2, "cm")), color = "blue") +
+  geom_text_repel(aes(x = PC1, y = PC2), size = 4, max.overlaps = 30) +
+  labs(title = "Wenatchee Climate Biplot",
+       x = "PC1", y = "PC2") +
+  theme_minimal()
+
+
 
 # 3.0 Species Distribution Model (SDM) -------------------------------------
 
