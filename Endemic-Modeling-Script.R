@@ -118,7 +118,7 @@ prepare_biomod_data <- function(presence_data, species_name, pseudo_absence_data
   occurrence_sf <- st_as_sf(presence_data)
   
   # Filter the data for the species of interest
-  occurrence_data <<- occurrence_sf %>%
+  occurrence_data <- occurrence_sf %>%
     filter(scientific_name == species_name) %>%
     dplyr::select(geometry)  # Keep only the geometry column
   
@@ -138,14 +138,16 @@ prepare_biomod_data <- function(presence_data, species_name, pseudo_absence_data
   pseudo_absence_data$Presence <- NA  # Add a Presence column to pseudo-absence data with NA values
   
   # Combine the occurrence data with pseudo-absence data
-  combined_data <<- bind_rows(coords, pseudo_absence_data)
+  combined_data <- bind_rows(coords, pseudo_absence_data)
+  combined_data <- as.data.frame(combined_data)
   
   # Format for BIOMOD_FormattingData
-  resp.var <<- combined_data$Presence  # Response variable (1 for presence, NA for pseudo-absence)
-  resp.xy <<- combined_data[, c("Longitude", "Latitude")]  # Coordinates for response variable
+  resp.var <- combined_data$Presence  # Response variable (1 for presence, NA for pseudo-absence)
+  resp.xy <- combined_data[, c("Longitude", "Latitude")]  # Coordinates for response variable
   PA.user.table <- combined_data[, (colnames(combined_data) %in% c("PA1", "PA2", "PA3", "PA4", "PA5", "PA6", "PA7", "PA8", "PA9", "PA10"))]  
-  PA.user.table <<- PA.user.table %>%
+  PA.user.table <- PA.user.table %>%
     mutate_all(~ ifelse(is.na(.), TRUE, .))
+  PA.user.table <- as.data.frame(PA.user.table)
   
   # Input into biomod package's formatting function
   formatted_data <- BIOMOD_FormatingData(
@@ -156,13 +158,50 @@ prepare_biomod_data <- function(presence_data, species_name, pseudo_absence_data
     PA.user.table = PA.user.table,   # User-defined pseudo-absence table
     resp.xy = resp.xy,              # Coordinates of species presence points
     resp.name = species_name,      # Species name
-    filter.raster = FALSE,           # removing occurrences in the same cell
+    filter.raster = TRUE,           # removing occurrences in the same cell
     na.rm = TRUE,
     dir.name = "Modeling/")
   
   # Return the formatted data for further use
   return(formatted_data)
 }
+
+biomod_modeling <- function(bm.data) { 
+
+single.models <-  BIOMOD_Modeling(bm.format = bm.data,      # data from biomod_modeling 
+                                  models = c("GLM", "RF", "GAM", "GBM", "MARS", "MAXNET"), # using the six most ubiquitous models in SDM
+                                  CV.strategy = "kfold",  # using k-fold cross-validation instead of random calibration splits
+                                  CV.k = 3,               # with 3 folds
+                                  CV.nb.rep = 2,          # and 2 repititions
+                                  CV.do.full.models = TRUE, # computing full models
+                                  metric.eval = c("TSS", "ROC"),  # evaluating by standard model-performance metrics, TSS and ROC
+                                  OPT.strategy = "bigboss",   # tuning parameters set by biomod2 authors, optimized for each model
+                                  OPT.data.type = "binary",   # default data type (i.e., no abundance)
+                                  var.import = 3)             # 3 permutations to test variable importance
+  
+return(single.models)
+return(get_evaluations(single.models))
+return(get_variables_importance(single.models))
+
+
+ensemble.models <- BIOMOD_EnsembleModeling(bm.mod = single.models,    # data from single.modes step above
+                                           models.chosen = "all",     # keeping all models
+                                           em.by = "algo",            # combining models by their algorithm 
+                                           em.algo = 'EMwmean',       # combining by mean values weighted by model performance
+                                           metric.select = c("TSS", "ROC"),     # excluding single models on the basis of TSS & ROC
+                                           metric.select.thresh = c(0.8, 0.8),  # which both must be above 0.8
+                                           metric.eval = "TSS",       # weights for WM combination correspond to TSS values
+                                           var.import = 3,            # 3 permutations to test variable importance
+                                           EMci.alpha = 0.05,         # alpha value of 0.05
+                                           EMwmean.decay = 'proportional')      # "weights are assigned to each model proportionally to their evaluation scores"
+
+return(ensemble.models)
+return(get_evaluations(ensemble.models))
+return(get_variables_importance(ensemble.models))
+return(bm_PlotVarImpBoxplot(bm.out = pera.em, group.by = c('expl.var', 'algo', 'merged.by.run')))
+
+} 
+
 
 # 1.3 Load Data ----
 
@@ -531,6 +570,12 @@ Rainierpcs_1_3_scores <- predict(RainierBiovarsAll, RainierPCA, index = 1:3)
 
 # 2.1 Adjusting Predictor Variables ----
 
+Wenatchee_BV_Current <- rast("Data/Large-Files/Wenatchee_1961_1990_Biovars.tif")
+
+Rainier_expl_full <- rast("Data/Large-Files/Rainier-expl-var-raster.tif") 
+
+names(Rainier_expl_full) <- gsub(" ", "", names(Rainier_expl_full))
+
 # 2.2 Adjusting Response Variables ----
 ## creating a data frame of occurrence and background data compatible with 'biomod2'
 
@@ -552,10 +597,14 @@ for (i in 1:10) {
   wenatchees.background.data[[paste0("PA", i)]] <- pseudo_absences  # Add as new column (e.g., PA_1, PA_2, ...)
 }
 
-Wenatchee_BV_Current <- rast("Data/Large-Files/Wenatchee_1961_1990_Biovars.tif")
 
-Rainier_expl_full <- rast("Data/Large-Files/Rainier-expl-var-raster.tif")
 
+
+# 2.3 Principle Coordinate Analysis (PCA) ----
+
+# 3.0 Species Distribution Model (SDM) -------------------------------------
+
+# Preparing data for biomod2 format
 bm.pera <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
                                species_name = "Pedicularis rainierensis",
                                pseudo_absence_data = rainier.background.data,
@@ -571,39 +620,104 @@ bm.cacr <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
                                pseudo_absence_data = rainier.background.data,
                                env.var = Rainier_expl_full)
 
-bm.anni <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
-                               species_name = "Androsace nivalis",
-                               pseudo_absence_data = wenatchees.background.data,
-                               env.var = Wenatchee_BV_Current)
+
+# Running biomod2 single models and ensemble modeling functions
+pera.em <- biomod_modeling(bm.data = bm.pera)
+
+tast.em <- biomod_modeling(bm.data = bm.tast)
+
+cacr.em <- biomod_modeling(bm.data = bm.cacr)
 
 
-anni.modeling <- BIOMOD_Modeling(bm.format = bm.anni,
-                                 models = c("GLM", "RF"),
-                                 models.pa = NULL,
-                                 CV.strategy = "kfold",
-                                 CV.k = 3,
-                                 CV.nb.rep = 2,
-                                 CV.do.full.models = TRUE,
-                                 metric.eval = c("TSS", "ROC"),
-                                 OPT.strategy = "bigboss",
-                                 OPT.data.type = "binary")
+# Projecting current suitable habitat
 
+
+# Projecting future suitable habitat in different climate change scenarios
+
+# Running Single Models *Takes ~20 minutes to run
 pera.modeling <- BIOMOD_Modeling(bm.format = bm.pera,
-                                 models = c("GLM", "RF"),
-                                 models.pa = NULL,
+                                 models = c("GLM", "RF", "GAM", "GBM", "MARS", "MAXNET"),
                                  CV.strategy = "kfold",
                                  CV.k = 3,
                                  CV.nb.rep = 2,
                                  CV.do.full.models = TRUE,
                                  metric.eval = c("TSS", "ROC"),
                                  OPT.strategy = "bigboss",
-                                 OPT.data.type = "binary")
+                                 OPT.data.type = "binary",
+                                 var.import = 3)
 
-cl <- get_calib_lines(anni.modeling)
+get_evaluations(pera.modeling)
+get_variables_importance(pera.modeling)
 
+bm_PlotEvalMean(bm.out = pera.modeling)
+bm_PlotEvalBoxplot(bm.out = pera.modeling, group.by = c('algo', 'algo'))
+bm_PlotEvalBoxplot(bm.out = pera.modeling, group.by = c('algo', 'run'))
+bm_PlotVarImpBoxplot(bm.out = pera.modeling, group.by = c('expl.var', 'algo', 'algo'))
+bm_PlotVarImpBoxplot(bm.out = pera.modeling, group.by = c('expl.var', 'algo', 'run'))
+bm_PlotVarImpBoxplot(bm.out = pera.modeling, group.by = c('algo', 'expl.var', 'run'))
 
-# 2.3 Principle Coordinate Analysis (PCA) ----
+bm_PlotResponseCurves(bm.out = pera.modeling, 
+                      models.chosen = get_built_models(pera.modeling)[c(1:3, 12:14)],
+                      fixed.var = 'median')
+bm_PlotResponseCurves(bm.out = pera.modeling, 
+                      models.chosen = get_built_models(pera.modeling)[c(1:3, 12:14)],
+                      fixed.var = 'min')
+bm_PlotResponseCurves(bm.out = pera.modeling, 
+                      models.chosen = get_built_models(pera.modeling)[3],
+                      fixed.var = 'median',
+                      do.bivariate = TRUE)
 
-# 3.0 Species Distribution Model (SDM) -------------------------------------
+# Ensemble Modeling - *Takes 60 minutes to run*
+pera.em <- BIOMOD_EnsembleModeling(bm.mod = pera.modeling, 
+                                   models.chosen = "all",
+                                   em.by = "algo",
+                                   em.algo = 'EMwmean',
+                                   metric.select = c("TSS", "ROC"),
+                                   metric.select.thresh = c(0.8, 0.8),
+                                   metric.eval = "TSS",
+                                   var.import = 3,
+                                   EMci.alpha = 0.05,
+                                   EMwmean.decay = 'proportional')
+
+get_evaluations(pera.em)
+get_variables_importance(pera.em)
+
+# Represent evaluation scores & variables importance
+bm_PlotEvalMean(bm.out = pera.em, group.by = 'full.name')
+bm_PlotEvalBoxplot(bm.out = pera.em, group.by = c('full.name', 'full.name'))
+bm_PlotVarImpBoxplot(bm.out = pera.em, group.by = c('expl.var', 'full.name', 'full.name'))
+bm_PlotVarImpBoxplot(bm.out = pera.em, group.by = c('expl.var', 'algo', 'merged.by.run'))
+bm_PlotVarImpBoxplot(bm.out = pera.em, group.by = c('algo', 'expl.var', 'merged.by.run'))
+
+# Represent response curves
+bm_PlotResponseCurves(bm.out = pera.em, 
+                      models.chosen = get_built_models(pera.em)[c(1, 6, 7)],
+                      fixed.var = 'median')
+bm_PlotResponseCurves(bm.out = pera.em, 
+                      models.chosen = get_built_models(pera.em)[c(1, 6, 7)],
+                      fixed.var = 'min')
+bm_PlotResponseCurves(bm.out = pera.em, 
+                      models.chosen = get_built_models(pera.em)[7],
+                      fixed.var = 'median',
+                      do.bivariate = TRUE)
+
+# 
+pera.proj <- BIOMOD_Projection(bm.mod = pera.modeling,
+                               proj.name = 'Current',
+                               new.env = Rainier_expl_full,
+                               build.clamping.mask = TRUE,
+                               nb.cpu = 2)
+pera.proj
+plot(pera.proj)
+
+pera.emproj <- BIOMOD_EnsembleForecasting(bm.em = pera.em,
+                                          proj.name = 'CurrentEM',
+                                          new.env = Rainier_expl_full,
+                                          models.chosen = 'all',
+                                          metric.binary = 'all',
+                                          metric.filter = 'all')
+pera.emproj
+plot(pera.emproj)
+
 
 # 4.0 Figures --------------------------------------------------------------
