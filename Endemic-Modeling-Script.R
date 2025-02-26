@@ -291,18 +291,25 @@ R.soils <- st_read(paste0(directory, "Rainier_Soil_Types.shp")) %>%
   rasterize(RainierDEM, field = "comp_tx_86")
 names(R.soils) <- "Soil Type"
 
-W.categorical <- c(R.soils, R.lith)
+R.categorical <- c(R.soils, R.lith)
 
 W.soils <- st_read(paste0(directory, "Wenatchees_Soil_Types.shp")) %>% 
-  mutate(comp_tx_86 = ifelse(is.na(comp_tx_86), "other", comp_tx_86)) %>%
   vect() %>% 
-  project("+proj=longlat +datum=WGS84") %>% 
-  rasterize(WenatcheeDEM, field = "comp_tx_86")
+  project("+proj=longlat +datum=WGS84")
+W.soils$comp_tx_86[2] <- "other"
+W.soils$comp_tx_86[11] <- "other"
+W.soils$comp_tx_86[12] <- "Andic Haplocryods"
+W.soils$comp_tx_86[13] <- "other"
+W.soils$comp_tx_86[14] <- "Andic Haplocryods"
+W.soils$comp_tx_86[19] <- "Andic Dystrocryepts"
+W.soils$comp_tx_86[22] <- "other"
+W.soils <- rasterize(W.soils, WenatcheeDEM, field = "comp_tx_86")
 names(W.soils) <- "Soil Type"
 
+W.categorical <- c(W.soils, W.lith)
 ##
 
-## Tree Canopy Cover Data
+## Tree Canopy Cover Data (Current Data)
 R.Canopy <- rast(paste0(directory, "USANLCDTreeCanopyCover_Ra.tif")) %>% 
   project("+proj=longlat +datum=WGS84") %>% 
   disagg(fact=5) %>% 
@@ -314,6 +321,9 @@ W.Canopy <- rast(paste0(directory, "USANLCDTreeCanopyCover_We.tif")) %>%
   disagg(fact=5) %>% 
   resample(WenatcheeDEM, method="bilinear")
 names(W.Canopy) <- "Tree Canopy Cover"
+
+## Tree Canopy Cover Data (GLM Model to predict Future Canopy Cover)
+
 
 ## Topological Data
 R.TPI.20 <- rast(paste0(directory, "RainierDEM10_TPI_20m.tif"))
@@ -418,7 +428,7 @@ WenEnvfit <- envfit(Wenatchee_1961_1990_PCA, Wenatchee_1961_1990_PCAMatrix, WenP
 summary(Wenatchee_1961_1990_PCA)
 
 # Project PCA result back onto a raster with a layer for each PC
-Wenatchee_1961_1990PC1.6_scores <- predict(W_1961_1990_PCAraster, Wenatchee_1961_1990_PCA, index = 1:6)
+Wenatchee_1961_1990_PC1.6_scores <- predict(W_1961_1990_PCAraster, Wenatchee_1961_1990_PCA, index = 1:6)
 
 Rainier_1961_1990_PC1.6_scores <- predict(R_1961_1990_PCAraster, Rainier_1961_1990_PCA, index = 1:6)
 
@@ -426,6 +436,11 @@ Rainier_1961_1990_PC1.6_scores <- predict(R_1961_1990_PCAraster, Rainier_1961_19
 # Combine First 6 Principal Components, Lithology, and Soils layers into single raster
 
 R.expl.var <- c(Rainier_1961_1990_PC1.6_scores, R.lith, R.soils)
+W.expl.var <- c(Wenatchee_1961_1990PC1.6_scores, W.lith, W.soils)
+
+# If exporting files, it is best to write the PCs as a .tif and the categorical variables as a .rds
+writeRaster(Rainier_1961_1990_PC1.6_scores, paste0(directory, "Rainier-PCs-1-6.tif"))
+writeRaster(Wenatchee_1961_1990PC1.6_scores, paste0(directory, "Wenatchee-PCs-1-6.tif"))
 
 
 writeRaster(R.expl.var, paste0(directory, "Rainier-expl-var-raster.tif"), datatype = c("FLT4S", "INT1U"), overwrite = TRUE)
@@ -601,7 +616,7 @@ BIOMOD_FormatingData(resp.name = "Pedicularis rainierensis",
 Occurrence <- read_csv(paste0(directory, "all-occurence-data_cleaned_latlon.csv")) %>% 
   mutate(Latitude=as.numeric(Latitude)) %>% 
   mutate(Longitude=as.numeric(Longitude)) %>% 
-  select(scientific_name, Longitude, Latitude) %>% 
+  dplyr::select(scientific_name, Longitude, Latitude) %>% 
   na.omit()
 
 # Rainier Climate PCA
@@ -642,7 +657,7 @@ RainierClimatePCAplot <- ggplot() +
   geom_hex(data = subset(R_Climate_PCA_df, Source == "Current"),  
            aes(x = PC1, y = PC2, fill = after_stat(count)),  
            bins = 50, alpha = 0.5) +
-  scale_fill_gradient(low = "lightgray", high = "black", name = "Current Density") +
+  scale_fill_gradient(name = "Climate Period", low = "lightgray", high = "black", guide = "none") +
   
   # Reset the fill scale before adding Future Climate
   new_scale_fill() +
@@ -651,33 +666,70 @@ RainierClimatePCAplot <- ggplot() +
   geom_hex(data = subset(R_Climate_PCA_df, Source == "Future (2071-2100)"),  
            aes(x = PC1, y = PC2, fill = after_stat(count)),  
            bins = 50, alpha = 0.5) +
-  scale_fill_gradient(low = "lightpink", high = "darkred", name = "Future Density") +
+  scale_fill_gradient(name = "Climate Period", low = "lightpink", high = "darkred", guide = "none") +
   
   # Manual Colors for Taxa
-  scale_color_manual(values = c("blue", "darkgreen", "purple")) +
+  scale_color_manual(name = "Taxon",
+                     values = c("blue", "darkgreen", "orange")) +
   
   # Points for Rainier Occurrence (highlighted taxa)
   geom_point(data = R_Occurrence_pcs,  
-             aes(x = PC1, y = PC2, color = scientific_name), size = 3, shape = 1) +
-  
-  # Ellipses for Highlighted Taxa
-  stat_ellipse(data = R_Occurrence_pcs,  
-               aes(x = PC1, y = PC2, color = scientific_name),  
+             aes(x = PC1, y = PC2, color = scientific_name, shape = scientific_name), size = 3, stroke = 1) +
+  scale_shape_manual(values = c(1, 0, 2)) + #add 3 and 8 for plus sign and star
+  # #Ellipses for Highlighted Taxa
+  stat_ellipse(data = R_Occurrence_pcs,
+               aes(x = PC1, y = PC2, color = scientific_name),
                level = 0.95, size = 1.2) +
-  
+  # stat_chull(data = R_Occurrence_pcs,
+  #            geom = "polygon",
+  #            aes(x = PC1, y = PC2, color = scientific_name),
+  #            alpha = 0.001,
+  #            show.legend = FALSE) +
+  # 
   new_scale_color() +
   
-  # Ellipses for Current and Future Climate Envelopes
-  stat_ellipse(data = R_Climate_PCA_df,  
-               aes(x = PC1, y = PC2, color = Source),  
-               level = 0.95, size = 1.2) + 
-  scale_color_manual(values = c("Current" = "black", "Future (2071-2100)" = "darkred")) +
-  
+  #Ellipses for Current and Future Climate Envelopes
+  # stat_ellipse(data = R_Climate_PCA_df,
+  #              aes(x = PC1, y = PC2, color = Source),
+  #              level = 0.95, size = 1.2) +
+  # scale_color_manual(name = "Climate Period",
+  #                    values = c("Current" = "black", "Future (2071-2100)" = "darkred")) +
+  # stat_chull(data = R_Climate_PCA_df,
+  #            geom = "polygon",
+  #            aes(x = PC1, y = PC2, color = Source),
+  #            alpha = 0.2, 
+  #            show.legend = FALSE) + 
+  # scale_color_manual(name = "Climate Period",
+  #                    values = c("Current" = "black", "Future (2071-2100)" = "darkred")) +
+  geom_segment(aes(x = -13, xend = 10, y = -6.5, yend = -6.5), 
+               arrow = arrow(type = "closed", ends = "both", length = unit(0.3, "cm")),
+               linewidth = 1) +
+  geom_segment(aes(x = -15, xend = -15, y = -5, yend = 5), 
+               arrow = arrow(type = "closed", ends = "both", length = unit(0.3, "cm")),
+               linewidth = 1) +
+  annotate("text", x = -12, y = 5.5, label = "More Variable Temp./Precip.", size = 3) +
+  annotate("text", x = -12, y = -5.5, label = "More Stable Temp./Precip.", size = 3) +
+  annotate("text", x = 9, y = -7, label = "Warmer", size = 3) +
+  annotate("text", x = -12, y = -7, label = "Wetter", size = 3)+
   theme_minimal() +
+  
+  # new_scale_fill() +
+  # scale_fill_manual(name = "Climate Period",  
+  #                   values = c("Current" = "gray", "Future" = "darkred"),
+  #                   labels = c("Current", "Future")) + 
+  
   theme(legend.position = "top",
+        legend.box = "vertical",  # Stack different legend groups vertically
+        legend.box.just = "left",
         panel.grid = element_blank()) +  # Removes all grid lines
-  labs(title = "Hexbin PCA Plot with Highlighted Taxa & Density Ellipses",
-       x = "PC1", y = "PC2", fill = "Density", color = "Taxa", linetype = "Climate Period")
+  guides(
+    color = guide_legend(order = 1),   # Ensures "Taxa" appears first
+    shape = guide_none()
+    # fill = guide_legend(order = 2)
+    # linetype = guide_legend(order = 2) # Ensures "Climate Period" appears below
+  ) +
+  labs(title = "Rainier Target Taxa Plotted Within Current and Projected Climate Envelopes",
+       x = "PC1", y = "PC2")
 
 # Wenatchee Climate PCA
 
@@ -718,7 +770,7 @@ WenatcheeClimatePCAplot <- ggplot() +
   geom_hex(data = subset(W_Climate_PCA_df, Source == "Current"),  
            aes(x = PC1, y = PC2, fill = after_stat(count)),  
            bins = 50, alpha = 0.5) +
-  scale_fill_gradient(low = "lightgray", high = "black", name = "Current Density") +
+  scale_fill_gradient(name = "Climate Period", low = "lightgray", high = "black", guide = "none") +
   
   # Reset the fill scale before adding Future Climate
   new_scale_fill() +
@@ -727,33 +779,74 @@ WenatcheeClimatePCAplot <- ggplot() +
   geom_hex(data = subset(W_Climate_PCA_df, Source == "Future (2071-2100)"),  
            aes(x = PC1, y = PC2, fill = after_stat(count)),  
            bins = 50, alpha = 0.5) +
-  scale_fill_gradient(low = "lightpink", high = "darkred", name = "Future Density") +
+  scale_fill_gradient(name = "Climate Period", low = "lightpink", high = "darkred", guide = "none") +
   
   # Manual Colors for Taxa
-  scale_color_manual(values = c("blue", "darkgreen", "purple", "orange", "cyan")) +
+  scale_color_manual(name = "Taxon",
+                     values = c("purple", "cyan", "blue","orange","darkgreen")) +
   
   # Points for Rainier Occurrence (highlighted taxa)
   geom_point(data = W_Occurrence_pcs,  
-             aes(x = PC1, y = PC2, color = scientific_name), size = 3, shape = 1) +
-  
-  # Ellipses for Highlighted Taxa
-  stat_ellipse(data = W_Occurrence_pcs,  
-               aes(x = PC1, y = PC2, color = scientific_name),  
+             aes(x = PC1, y = PC2, color = scientific_name, shape = scientific_name), size = 3, stroke = 1) +
+  scale_shape_manual(values = c(8, 1, 0, 2, 3)) + #add 3 and 8 for plus sign and star
+  # #Ellipses for Highlighted Taxa
+  stat_ellipse(data = W_Occurrence_pcs,
+               aes(x = PC1, y = PC2, color = scientific_name),
                level = 0.95, size = 1.2) +
-  
+  # stat_chull(data = R_Occurrence_pcs,
+  #            geom = "polygon",
+  #            aes(x = PC1, y = PC2, color = scientific_name),
+  #            alpha = 0.001,
+  #            show.legend = FALSE) +
+  # 
   new_scale_color() +
   
-  # Ellipses for Current and Future Climate Envelopes
-  stat_ellipse(data = W_Climate_PCA_df,  
-               aes(x = PC1, y = PC2, color = Source),  
-               level = 0.95, size = 1.2) + 
-  scale_color_manual(values = c("Current" = "black", "Future (2071-2100)" = "darkred")) +
-  
+  #Ellipses for Current and Future Climate Envelopes
+  # stat_ellipse(data = R_Climate_PCA_df,
+  #              aes(x = PC1, y = PC2, color = Source),
+  #              level = 0.95, size = 1.2) +
+  # scale_color_manual(name = "Climate Period",
+  #                    values = c("Current" = "black", "Future (2071-2100)" = "darkred")) +
+  # stat_chull(data = R_Climate_PCA_df,
+  #            geom = "polygon",
+  #            aes(x = PC1, y = PC2, color = Source),
+  #            alpha = 0.2, 
+  #            show.legend = FALSE) + 
+  # scale_color_manual(name = "Climate Period",
+  #                    values = c("Current" = "black", "Future (2071-2100)" = "darkred")) +
+  geom_segment(aes(x = -10, xend = 10, y = -5.5, yend = -5.5), 
+               arrow = arrow(type = "closed", ends = "both", length = unit(0.3, "cm")),
+               linewidth = 1) +
+  geom_segment(aes(x = -11, xend = -11, y = -4, yend = 5), 
+               arrow = arrow(type = "closed", ends = "both", length = unit(0.3, "cm")),
+               linewidth = 1) +
+  annotate("text", x = -9, y = 5.5, label = "More Stable Temp./Precip.", size = 3) +
+  annotate("text", x = -9, y = -4.5, label = "More Variable Temp./Precip.", size = 3) +
+  annotate("text", x = 9, y = -6, label = "Wetter", size = 3) +
+  annotate("text", x = -10.5, y = -6, label = "Warmer", size = 3)+
   theme_minimal() +
+  
+  # new_scale_fill() +
+  # scale_fill_manual(name = "Climate Period",  
+  #                   values = c("Current" = "gray", "Future" = "darkred"),
+  #                   labels = c("Current", "Future")) + 
+  
   theme(legend.position = "top",
+        legend.box = "horizontal",  # Stack different legend groups vertically
+        legend.box.just = "left",
+        legend.text = element_text(size = 8),  # Adjust text size to fit everything
+        legend.title = element_text(size = 9),  # Slightly larger title for readability
+        legend.justification = c(0, 0.5),
+        legend.margin = margin(0, -50, 0, 0),
         panel.grid = element_blank()) +  # Removes all grid lines
-  labs(title = "Hexbin PCA Plot with Highlighted Taxa & Density Ellipses",
-       x = "PC1", y = "PC2", fill = "Density", color = "Taxa", linetype = "Climate Period")
+  guides(
+    color = guide_legend(order = 1, nrow = 2, byrow = TRUE),   # Ensures "Taxa" appears first
+    shape = guide_none()
+    # fill = guide_legend(order = 2)
+    # linetype = guide_legend(order = 2) # Ensures "Climate Period" appears below
+  ) +
+  labs(title = "Wenatchee Target Taxa Plotted Within Current and Projected Climate Envelopes",
+       x = "PC1", y = "PC2")
 
 # Biplot for interpretation
 
