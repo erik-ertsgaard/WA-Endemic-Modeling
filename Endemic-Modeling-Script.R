@@ -23,7 +23,8 @@ install.packages("randomForest")
 install.packages("maxnet")
 install.packages("mda")
 install.packages("earth")
-
+install.packages("devtools")
+install.packages("vegan")
 
 library(biomod2)
 library(tidyverse)
@@ -39,7 +40,7 @@ library(rnaturalearth)
 library(ggspatial)
 library(prettymapr)
 library(devtools)
-library(biomod2)
+library(vegan)
 
 
 # 1.2 Load Functions ----
@@ -166,7 +167,7 @@ prepare_biomod_data <- function(presence_data, species_name, pseudo_absence_data
   return(formatted_data)
 }
 
-biomod_modeling <- function(bm.data) { 
+biomod_single_models <- function(bm.data) { 
 
 single.models <-  BIOMOD_Modeling(bm.format = bm.data,      # data from biomod_modeling 
                                   models = c("GLM", "RF", "GAM", "GBM", "MARS", "MAXNET"), # using the six most ubiquitous models in SDM
@@ -180,28 +181,39 @@ single.models <-  BIOMOD_Modeling(bm.format = bm.data,      # data from biomod_m
                                   var.import = 3)             # 3 permutations to test variable importance
   
 return(single.models)
-return(get_evaluations(single.models))
-return(get_variables_importance(single.models))
 
+}
 
-ensemble.models <- BIOMOD_EnsembleModeling(bm.mod = single.models,    # data from single.modes step above
+biomod_ensemble_models <- function(bm.modeling.output) {
+  
+ensemble.models <- BIOMOD_EnsembleModeling(bm.mod = bm.modeling.output,    # data from single.modes step above
                                            models.chosen = "all",     # keeping all models
-                                           em.by = "algo",            # combining models by their algorithm 
+                                           em.by = "all",            # combining models by their algorithm 
                                            em.algo = 'EMwmean',       # combining by mean values weighted by model performance
                                            metric.select = c("TSS", "ROC"),     # excluding single models on the basis of TSS & ROC
                                            metric.select.thresh = c(0.8, 0.8),  # which both must be above 0.8
-                                           metric.eval = "TSS",       # weights for WM combination correspond to TSS values
+                                           metric.eval = c("TSS", "ROC"),       # weights for WM combination correspond to TSS values
                                            var.import = 3,            # 3 permutations to test variable importance
                                            EMci.alpha = 0.05,         # alpha value of 0.05
                                            EMwmean.decay = 'proportional')      # "weights are assigned to each model proportionally to their evaluation scores"
 
 return(ensemble.models)
-return(get_evaluations(ensemble.models))
-return(get_variables_importance(ensemble.models))
-return(bm_PlotVarImpBoxplot(bm.out = pera.em, group.by = c('expl.var', 'algo', 'merged.by.run')))
 
-} 
+}
 
+biomod_ensemble_forecast <- function(bm.ensemble.output, proj.name, new.env)  {
+  
+ensemble.forecast <- BIOMOD_EnsembleForecasting(bm.em = bm.ensemble.output,
+                                                proj.name = proj.name,
+                                                new.env = new.env,
+                                                models.chosen = 'all',
+                                                metric.binary = 'all',
+                                                metric.filter = 'all', 
+                                                nb.cpu = 2)
+
+return(ensemble.forecast)
+  
+}
 
 # 1.3 Load Data ----
 
@@ -253,7 +265,7 @@ RainierDEM <- crop(Rainier, SpatVectorRainier) %>%
   project("+proj=longlat +datum=WGS84")
 
 writeRaster(WenatcheeDEM, filename = paste0(directory, "WenatcheeDEM.tif"))
-
+a
 writeRaster(RainierDEM, filename = paste0(directory, "RainierDEM.tif"))
 
 ## Climate Data
@@ -442,7 +454,7 @@ inat.all <- rbind(get_inat_obs(taxon_name = "Pedicularis rainierensis"),
                   get_inat_obs(taxon_name = "Oreocarya thompsonii"),
                   get_inat_obs(taxon_name = "Lomatium cuspidatum"),
                   get_inat_obs(taxon_name = "Androsace nivalis"),
-                  get_inat_obs(taxon_name = "Claytonia megarhiza nivalis")) %>% #synonym for Wenatchee Mts disjunct
+                  get_inat_obs(taxon_name = "Claytonia megarhiza nivalis")) %>% 
   filter(quality_grade == "research") %>%
   filter(positional_accuracy < 30) %>%
   filter(!is.na(positional_accuracy)) %>%
@@ -450,6 +462,8 @@ inat.all <- rbind(get_inat_obs(taxon_name = "Pedicularis rainierensis"),
 
 # creating a file for reference in the repository, may be replaced when more response data is appended
 write_csv(inat.all, file = "Data/inat-response-data.csv")
+
+inat.all <- read_csv("Data/inat-response-data.csv")
 
 # converting inat.all to spatial data frame
 inat.all <- st_as_sf(inat.all,
@@ -570,11 +584,94 @@ Rainierpcs_1_3_scores <- predict(RainierBiovarsAll, RainierPCA, index = 1:3)
 
 # 2.1 Adjusting Predictor Variables ----
 
-Wenatchee_BV_Current <- rast("Data/Large-Files/Wenatchee_1961_1990_Biovars.tif")
+# loading Rainier variables from prior work, combining continuous and discrete raster layers, and removing spaces in column names
+Rainier_PCs_current <- rast("Data/Large-Files/RainierFinalCurrentPCs1-6.tif")
 
-Rainier_expl_full <- rast("Data/Large-Files/Rainier-expl-var-raster.tif") 
+Rainier_geology <- read_rds("Data/Large-Files/Rainier-categorical-vars.rds") %>%
+  unwrap()
 
-names(Rainier_expl_full) <- gsub(" ", "", names(Rainier_expl_full))
+names(Rainier_geology) <- gsub(" ", "", names(Rainier_geology))
+
+Rainier_expl_current <- c(Rainier_geology, Rainier_PCs_current)
+
+Rainier_PCs_ssp245 <- rast("Data/Large-Files/RainierFinalssp245PCs1-6.tif") 
+
+Rainier_expl_ssp245 <- c(Rainier_geology, Rainier_PCs_ssp245)
+
+
+# Reassigning areas with lithologies where no presence or PA points occur (for later modeling efficacy) but plants could still hypothetically occur
+Rainier_expl_current$Lithology[Rainier_expl_current$Lithology == 11] <- 3             # Qi -> Ti
+Rainier_expl_current$Lithology[Rainier_expl_current$Lithology == 13] <- 4             # QTv -> Tv
+Rainier_expl_current$Lithology[Rainier_expl_current$Lithology == 7] <- 8              # Qls -> Qa
+
+
+plot(Rainier_expl_current$PC1)
+
+# Doing the same for soil types
+Rainier_expl_current$SoilType[Rainier_expl_current$SoilType == 4] <- 1               # Typic Hapludands -> Andic Haplocryods
+
+plot(Rainier_expl_current$SoilType)
+
+# Repeating for ssp245
+Rainier_expl_ssp245$Lithology[Rainier_expl_ssp245$Lithology == 11] <- 3             # Qi -> Ti
+
+Rainier_expl_ssp245$Lithology[Rainier_expl_ssp245$Lithology == 13] <- 4             # QTv -> Tv
+
+Rainier_expl_ssp245$SoilType[Rainier_expl_ssp245$SoilType == 4] <- 1               # Typic Hapludands -> Andic Haplocryods
+
+plot(Rainier_expl_ssp245$SoilType)
+plot(Rainier_expl_ssp245$Lithology)
+
+# Removing data from all layers of areas covered by ice
+mask_ice <- Rainier_expl_current$Lithology == "ice"
+
+Rainier_expl_current <- mask(x = Rainier_expl_current,
+                             mask = mask_ice,
+                             maskvalues = TRUE)
+
+mask_ice_f <- Rainier_expl_ssp245$Lithology == "ice"
+
+Rainier_expl_ssp245 <- mask(x = Rainier_expl_ssp245,
+                             mask = mask_ice_f,
+                             maskvalues = TRUE)
+
+# loading Wenatchee variables from prior work, combining continuous and discrete raster layers, and removing spaces in column names
+Wenatchee_PCs <- rast("Data/Large-Files/Wenatchee-PCs-1-6.tif")
+
+Wenatchee_soil <- read_rds("Data/Large-Files/Wenatchee-categorical-vars.rds") %>%
+  unwrap()
+
+Wenatchee_expl_current <- c(Wenatchee_soil, Wenatchee_PCs)
+
+names(Wenatchee_expl_current) <- gsub(" ", "", names(Wenatchee_expl_current))
+
+# Reassigning areas with Soil Types where no presence or PA points occur (for later modeling efficacy) but plants could still hypothetically occur
+levels(Wenatchee_expl_current$SoilType)
+
+soil_values <- values(Wenatchee_expl_current$SoilType)
+
+soil_values[soil_values == 5] <- 3                                          # Typic Haploxerolls -> Andic Haploxerolls
+
+Wenatchee_expl_current$SoilType <- setValues(Wenatchee_expl_current$SoilType, soil_values) %>%
+  as.factor() 
+
+levels(Wenatchee_expl_current$SoilType) <- c(
+  "Andic Dystrocryepts",  # ID 0
+  "Andic Dystroxerepts",  # ID 1
+  "Andic Haplocryods",    # ID 2
+  "Aridic Haploxerolls",  # ID 3
+  "Pachic Ultic Argixerolls",  # ID 4
+  "Typic Haploxerolls",   # ID 5
+  "Typic Vitrixerands",   # ID 6
+  "Vitrandic Argixerolls",  # ID 7
+  "Vitrandic Dystroxerepts",  # ID 8
+  "Xeric Vitricryands",   # ID 9
+  "other"                 # ID 10
+) 
+
+plot(Wenatchee_expl_current$SoilType)
+
+plot(Wenatchee_expl_current$Category)
 
 # 2.2 Adjusting Response Variables ----
 ## creating a data frame of occurrence and background data compatible with 'biomod2'
@@ -604,35 +701,140 @@ for (i in 1:10) {
 
 # 3.0 Species Distribution Model (SDM) -------------------------------------
 
-# Preparing data for biomod2 format
+# Preparing data for biomod2 formatting requirements
 bm.pera <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
                                species_name = "Pedicularis rainierensis",
                                pseudo_absence_data = rainier.background.data,
-                               env.var = Rainier_expl_full)
+                               env.var = Rainier_expl_current)
 
 bm.tast <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
                                species_name = "Tauschia stricklandii",
                                pseudo_absence_data = rainier.background.data,
-                               env.var = Rainier_expl_full)
+                               env.var = Rainier_expl_current)
 
 bm.cacr <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
                                species_name = "Castilleja cryptantha",
                                pseudo_absence_data = rainier.background.data,
-                               env.var = Rainier_expl_full)
+                               env.var = Rainier_expl_current)
+
+bm.clme <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
+                               species_name = "Claytonia megarhiza",
+                               pseudo_absence_data = wenatchees.background.data,
+                               env.var = Wenathcee_expl_current)
+
+bm.chth <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
+                               species_name = "Chaenactis thompsonii",
+                               pseudo_absence_data = wenatchees.background.data,
+                               env.var = Wenathcee_expl_current)
+
+bm.anni <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
+                               species_name = "Androsace nivalis",
+                               pseudo_absence_data = wenatchees.background.data,
+                               env.var = Wenathcee_expl_current)
+
+bm.locu <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
+                               species_name = "Lomatium cuspidatum",
+                               pseudo_absence_data = wenatchees.background.data,
+                               env.var = Wenathcee_expl_current)
+
+bm.orth <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
+                               species_name = "Oreocarya thompsonii",
+                               pseudo_absence_data = wenatchees.background.data,
+                               env.var = Wenathcee_expl_current)
+
+# Running biomod2 single models 
+pera.sms <- biomod_single_models(bm.data = bm.pera)
+
+tast.sms <- biomod_single_models(bm.data = bm.tast)
+
+cacr.sms <- biomod_single_models(bm.data = bm.cacr)
+
+clme.sms <- biomod_single_models(bm.data = bm.clme)
+
+anni.sms <- biomod_single_models(bm.data = bm.anni)
+
+chth.sms <- biomod_single_models(bm.data = bm.chth)
+
+locu.sms <- biomod_single_models(bm.data = bm.locu)
+
+orth.sms <- biomod_single_models(bm.data = bm.orth)
+
+bm_PlotEvalMean(bm.out = orth.sms)
+
+bm_PlotVarImpBoxplot(bm.out = orth.sms, group.by = c('expl.var', 'algo', 'algo'))
 
 
-# Running biomod2 single models and ensemble modeling functions
-pera.em <- biomod_modeling(bm.data = bm.pera)
+# Running biomod2 ensemble models 
+pera.em <- biomod_ensemble_models(bm.modeling.output = pera.sms)
 
-tast.em <- biomod_modeling(bm.data = bm.tast)
+tast.em <- biomod_ensemble_models(bm.modeling.output = tast.sms)
 
-cacr.em <- biomod_modeling(bm.data = bm.cacr)
+cacr.em <- biomod_ensemble_models(bm.modeling.output = cacr.sms)
+
+clme.em <- biomod_ensemble_models(bm.modeling.output = clme.sms)
+
+anni.em <- biomod_ensemble_models(bm.modeling.output = anni.sms)
+
+chth.em <- biomod_ensemble_models(bm.modeling.output = chth.sms)
+
+locu.em <- biomod_ensemble_models(bm.modeling.output = locu.sms)
+
+orth.em <- biomod_ensemble_models(bm.modeling.output = orth.sms)
 
 
 # Projecting current suitable habitat
+pera.emproj.current <- biomod_ensemble_forecast(bm.ensemble.output = pera.em,
+                                                proj.name = "CurrentEM", 
+                                                new.env = Rainier_expl_current)
+
+tast.emproj.current <- biomod_ensemble_forecast(bm.ensemble.output = tast.em,
+                                                proj.name = "CurrentEM", 
+                                                new.env = Rainier_expl_current)
+
+cacr.emproj.current <- biomod_ensemble_forecast(bm.ensemble.output = cacr.em,
+                                                proj.name = "CurrentEM", 
+                                                new.env = Rainier_expl_current)
+
+clme.emproj.current <- biomod_ensemble_forecast(bm.ensemble.output = clme.em,
+                                                proj.name = "CurrentEM", 
+                                                new.env = Wenatchee_expl_current)
+
+anni.emproj.current <- biomod_ensemble_forecast(bm.ensemble.output = anni.em,
+                                                proj.name = "CurrentEM", 
+                                                new.env = Wenatchee_expl_current)
+
+chth.emproj.current <- biomod_ensemble_forecast(bm.ensemble.output = chth.em,
+                                                proj.name = "CurrentEM", 
+                                                new.env = Wenatchee_expl_current)
+
+locu.emproj.current <- biomod_ensemble_forecast(bm.ensemble.output = locu.em,
+                                                proj.name = "CurrentEM", 
+                                                new.env = Wenatchee_expl_current)
+
+orth.emproj.current <- biomod_ensemble_forecast(bm.ensemble.output = orth.em,
+                                                proj.name = "CurrentEM", 
+                                                new.env = Wenatchee_expl_current)
 
 
 # Projecting future suitable habitat in different climate change scenarios
+
+
+### Depreciated mdoel workflow testing code ----
+
+pera.em.test <- BIOMOD_EnsembleModeling(bm.mod = pera.sms,    # data from single.modes step above
+                                           models.chosen = "all",     # keeping all models
+                                           em.by = "all",            # ---
+                                           em.algo = 'EMwmean',       # combining by mean values weighted by model performance
+                                           metric.select = c("TSS", "ROC"),     # excluding single models on the basis of TSS & ROC
+                                           metric.select.thresh = c(0.8, 0.8),  # which both must be above 0.8
+                                           metric.eval = c("TSS", "ROC"),       # weights for WM combination correspond to TSS values
+                                           var.import = 3,            # 3 permutations to test variable importance
+                                           EMci.alpha = 0.05,         # alpha value of 0.05
+                                           EMwmean.decay = 'proportional')      # "weights are assigned to each model proportionally to their evaluation scores"
+
+
+
+
 
 # Running Single Models *Takes ~20 minutes to run
 pera.modeling <- BIOMOD_Modeling(bm.format = bm.pera,
@@ -646,15 +848,15 @@ pera.modeling <- BIOMOD_Modeling(bm.format = bm.pera,
                                  OPT.data.type = "binary",
                                  var.import = 3)
 
-get_evaluations(pera.modeling)
-get_variables_importance(pera.modeling)
+get_evaluations(pera.sms)
+get_variables_importance(pera.sms)
 
-bm_PlotEvalMean(bm.out = pera.modeling)
-bm_PlotEvalBoxplot(bm.out = pera.modeling, group.by = c('algo', 'algo'))
-bm_PlotEvalBoxplot(bm.out = pera.modeling, group.by = c('algo', 'run'))
-bm_PlotVarImpBoxplot(bm.out = pera.modeling, group.by = c('expl.var', 'algo', 'algo'))
-bm_PlotVarImpBoxplot(bm.out = pera.modeling, group.by = c('expl.var', 'algo', 'run'))
-bm_PlotVarImpBoxplot(bm.out = pera.modeling, group.by = c('algo', 'expl.var', 'run'))
+bm_PlotEvalMean(bm.out = pera.sms)
+bm_PlotEvalBoxplot(bm.out = pera.sms, group.by = c('algo', 'algo'))
+bm_PlotEvalBoxplot(bm.out = pera.sms, group.by = c('algo', 'run'))
+bm_PlotVarImpBoxplot(bm.out = pera.sms, group.by = c('expl.var', 'algo', 'algo'))
+bm_PlotVarImpBoxplot(bm.out = pera.sms, group.by = c('expl.var', 'algo', 'run'))
+bm_PlotVarImpBoxplot(bm.out = pera.sms, group.by = c('algo', 'expl.var', 'run'))
 
 bm_PlotResponseCurves(bm.out = pera.modeling, 
                       models.chosen = get_built_models(pera.modeling)[c(1:3, 12:14)],
@@ -670,11 +872,11 @@ bm_PlotResponseCurves(bm.out = pera.modeling,
 # Ensemble Modeling - *Takes 60 minutes to run*
 pera.em <- BIOMOD_EnsembleModeling(bm.mod = pera.modeling, 
                                    models.chosen = "all",
-                                   em.by = "algo",
+                                   em.by = "all",
                                    em.algo = 'EMwmean',
                                    metric.select = c("TSS", "ROC"),
                                    metric.select.thresh = c(0.8, 0.8),
-                                   metric.eval = "TSS",
+                                   metric.eval = c("TSS", "ROC"),
                                    var.import = 3,
                                    EMci.alpha = 0.05,
                                    EMwmean.decay = 'proportional')
@@ -715,9 +917,17 @@ pera.emproj <- BIOMOD_EnsembleForecasting(bm.em = pera.em,
                                           new.env = Rainier_expl_full,
                                           models.chosen = 'all',
                                           metric.binary = 'all',
-                                          metric.filter = 'all')
+                                          metric.filter = 'all', 
+                                          nb.cpu = 2)
 pera.emproj
 plot(pera.emproj)
+
+write_rds(pera.emproj, 
+          file = "Modeling/pera-projections-firstrun.rds")
+
+pera.binproj <- get_predictions(pera.emproj,
+                                metric.binary = "TSS")
+
 
 
 # 4.0 Figures --------------------------------------------------------------
