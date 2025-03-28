@@ -12,6 +12,8 @@ Some important things to note before using this repository,
 
 3. Until these results are published, any files and their contents are subject to change. We expect to publish in 2025 and don't expect competing research. But this public repository is intended for reproducibility. Please contact us if you are directly copying this code for personal research. Downloading our data on plant locations for any purpose other than reproducing our research is frowned upon.
 
+4. The Modeling folder is mostly populated automatically by biomod2 and is not up to date with the author's progress since the files are often too large for GitHub. To see the final model projection results, visit the OSF repo. Otherwise, this folder will populate with .out and .tif files as you work through the Endemic-Modeling-Script.R
+
 
 We owe much of our successes to the package developers of Biomod2. You can explore at https://biomodhub.github.io/biomod2/
 
