@@ -10,7 +10,7 @@ Here is a schematic of a general, repeatable workflow to navigate the repository
 
 
 
-Lastly, some important things to note before using this repository,
+Lastly, here are some important things to note before using this repository,
 
 1. Some data files are too large to be stored on GitHub. We have published an Open Science Framework (OSF) Repository to store large files (https://doi.org/10.17605/OSF.IO/HT39X). To use those files, store them on your local device in a subfolder of Data/ named "Large-Files" (WA-Endemic-Modeling/Data/Large-Files) for the best compatibility with our published code. That repo also contains final projection results (WA-Endemic-Modeling/Data/Final-Projections) that feed into the SDM figure script. You are also welcome to download these to take a closer look at our projected results (using any platform that can handle .tif files).
 
