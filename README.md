@@ -6,7 +6,10 @@ analyses, figures, or writing. Now, it serves as a public repository for the man
 
 Here is a schematic of a general, repeatable workflow to navigate the repository and/or use our framework for a climate-change habitat modeling project of your own!
 
-<img width="1435" alt="Screenshot 2025-06-03 at 9 58 22 AM" src="https://github.com/user-attachments/assets/116d52b3-3bc4-462c-af3e-d84f911f863e" />
+
+
+
+<img width="1434" alt="Screenshot 2025-06-03 at 3 25 33 PM" src="https://github.com/user-attachments/assets/de15b03f-0589-498c-be74-89d9b0e2f9b2" />
 
 
 
