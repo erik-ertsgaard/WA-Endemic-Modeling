@@ -93,29 +93,30 @@ reproject_to_wgs84 <- function(df) {
 
 remove_nearby_points <- function(df, dist_threshold = 10) {
   
-  # Create an empty list to store the indices of points to keep
-  keep_indices <- vector("list", length = nrow(df))
+  # Keep track of indices of points we accept
+  keep <- c()
   
-  # Loop over all points and compare distances
+  # Loop through points in order
   for (i in 1:nrow(df)) {
-    # Calculate distance between the i-th point and all other points
-    distances <- st_distance(df[i, ], df)
-    
-    # Convert the distances to numeric values (in meters)
-    distances_numeric <- as.numeric(distances)
-    
-    # Check if any point is within the distance threshold (excluding the point itself)
-    close_points <- which(distances_numeric < dist_threshold & distances_numeric > 0)
-    
-    # If no close points, keep this point (it will be added later)
-    if (length(close_points) == 0) {
-      keep_indices[[i]] <- i
+    if (length(keep) == 0) {
+      # Always keep the first point
+      keep <- c(keep, i)
+    } else {
+      # Compute distance from point i to all previously kept points
+      distances <- st_distance(df[i, ], df[keep, ])
+      distances_numeric <- as.numeric(distances)
+      
+      # If point i is farther than threshold from all kept points, keep it
+      if (all(distances_numeric >= dist_threshold)) {
+        keep <- c(keep, i)
+      }
     }
   }
   
-  # Return the subset of points to keep
-  return(df[unlist(keep_indices), ])
+  # Return only kept points
+  return(df[keep, ])
 }
+
 
 prepare_biomod_data <- function(presence_data, species_name, pseudo_absence_data, env.var) {
   
@@ -977,3 +978,4 @@ get_maptypes()
 basemap(ext = RainierExtentPolygon,
         map_service = "esri",
         map_type = "world_hillshade_dark")
+
