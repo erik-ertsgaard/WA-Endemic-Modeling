@@ -26,6 +26,7 @@ install.packages("earth")
 install.packages("devtools")
 install.packages("vegan")
 install.packages("tidyterra")
+install.packages("caret")
 install.packages("ggtext")
 
 library(biomod2)
@@ -44,6 +45,7 @@ library(prettymapr)
 library(devtools)
 library(vegan)
 library(tidyterra)
+library(caret)
 library(ggtext)
 
 
@@ -173,20 +175,52 @@ prepare_biomod_data <- function(presence_data, species_name, pseudo_absence_data
 }
 
 biomod_single_models <- function(bm.data) { 
-
-single.models <-  BIOMOD_Modeling(bm.format = bm.data,      # data from biomod_modeling 
-                                  models = c("GLM", "RF", "ANN", "MARS"), # using the six most ubiquitous models in SDM
-                                  CV.strategy = "kfold",  # using k-fold cross-validation instead of random calibration splits
-                                  CV.k = 3,               # with 3 folds
-                                  CV.nb.rep = 2,          # and 2 repititions
-                                  CV.do.full.models = TRUE, # computing full models
-                                  metric.eval = c("TSS", "ROC"),  # evaluating by standard model-performance metrics, TSS and ROC
-                                  OPT.strategy = "bigboss",   # tuning parameters set by biomod2 authors, optimized for each model
-                                  OPT.data.type = "binary",   # default data type (i.e., no abundance)
-                                  var.import = 3)             # 3 permutations to test variable importance
   
-return(single.models)
-
+  # Defining cross-validation and single model parameters for later tuning
+  myCVtable <- bm_CrossValidation(bm.format = bm.data,
+                                  strategy = "kfold",
+                                  k = 5,
+                                  nb.rep = 2,         
+                                  do.full.models = TRUE)
+  
+  myOpt  <- bm_ModelingOptions(data.type = 'binary',
+                               models = c("GLM", "RF", "ANN", "MARS"),
+                               strategy = 'bigboss',
+                               bm.format = bm.data, 
+                               calib.lines = myCVtable)
+  
+  # Tuning Random Forests (most prone to overfitting) parameter "mtry" for our data
+  tuned.rf <- bm_Tuning(model = 'RF',
+                        tuning.fun = 'rf', 
+                        do.formula = FALSE,
+                        bm.options = myOpt@options$RF.binary.randomForest.randomForest,
+                        bm.format = bm.data, 
+                        calib.lines = myCVtable)
+  
+  rf.user.val <- list(RF.binary.randomForest.randomForest = tuned.rf)
+  
+  # Setting tuned RF parameter, and all other models as BIOMOD2 "bigboss" option
+  myOpt <- bm_ModelingOptions(data.type = 'binary',
+                              models = c("GLM", "RF", "ANN", "MARS"),
+                              strategy = "user.defined",
+                              user.val = rf.user.val,
+                              user.base = "bigboss",
+                              bm.format = bm.data, 
+                              calib.lines = myCVtable)
+  
+  
+  
+  single.models <-  BIOMOD_Modeling(bm.format = bm.data,      # data from biomod_modeling 
+                                    models = c("GLM", "RF", "ANN", "MARS"), # using the four most suitable models in SDM
+                                    CV.strategy = "user.defined",  # using k-fold cross-validation instead of random calibration splits
+                                    CV.user.table = myCVtable,
+                                    OPT.user = myOpt,
+                                    CV.do.full.models = TRUE, # computing full models
+                                    metric.eval = c("TSS", "ROC"),  # evaluating by standard model-performance metrics, TSS and ROC
+                                    var.import = 3)             # 3 permutations to test variable importance
+  
+  return(single.models)
+  
 }
 
 biomod_ensemble_models <- function(bm.modeling.output) {
@@ -978,4 +1012,5 @@ get_maptypes()
 basemap(ext = RainierExtentPolygon,
         map_service = "esri",
         map_type = "world_hillshade_dark")
+
 
