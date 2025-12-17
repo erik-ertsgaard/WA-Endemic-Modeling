@@ -645,7 +645,7 @@ soiltype_counts.r <- levelsdf.r %>%
   group_by(SoilType) %>%
   summarize(count = n(), proportion = n()/nrow(rainier.background.data1))
 
-# Conerting the name of all rare levels to "other
+# Conerting the name of all rare levels to "other"
 rare_soils.r <- soiltype_counts.r$SoilType[soiltype_counts.r$proportion < 0.05]
 
 soil_levels.r <- levels(Rainier_geology$SoilType)[[1]]
@@ -726,7 +726,7 @@ soiltype_counts <- levelsdf %>%
   group_by(SoilType) %>%
   summarize(count = n(), proportion = n()/nrow(wenatchees.background.data1))
 
-# Conerting the name of all rare levels to "other
+# Conerting the name of all rare levels to "other"
 rare_soils <- soiltype_counts$SoilType[soiltype_counts$proportion < 0.05]
 
 soil_levels <- levels(Wenatchee_soil$SoilType)[[1]]
@@ -851,7 +851,7 @@ bm.orth <- prepare_biomod_data(presence_data = occurrence_data_cleaned,
 # Running biomod2 single models 
 pera.sms <- biomod_single_models(bm.data = bm.pera)
 
-#tast.sms <- biomod_single_models(bm.data = bm.tast)
+tast.sms <- biomod_single_models(bm.data = bm.tast)
 
 cacr.sms <- biomod_single_models(bm.data = bm.cacr)
 
@@ -869,7 +869,7 @@ orth.sms <- biomod_single_models(bm.data = bm.orth)
 # Running biomod2 ensemble models 
 pera.em <- biomod_ensemble_models(bm.modeling.output = pera.sms)
 
-#tast.em <- biomod_ensemble_models(bm.modeling.output = tast.sms)
+tast.em <- biomod_ensemble_models(bm.modeling.output = tast.sms)
 
 cacr.em <- biomod_ensemble_models(bm.modeling.output = cacr.sms)
 
@@ -1012,5 +1012,6 @@ get_maptypes()
 basemap(ext = RainierExtentPolygon,
         map_service = "esri",
         map_type = "world_hillshade_dark")
+
 
 
